@@ -26,18 +26,13 @@ app.use(cors({
   credentials: true
 }));
 
-// MongoDB connection
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('MongoDB Connected'))
-  .catch(err => console.error('MongoDB connection error:', err));
-
 // Session configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({
-    client: mongoose.connection.getClient(),
+    mongoUrl: process.env.MONGODB_URI,
     ttl: 24 * 60 * 60 // 1 day
   }),
   cookie: {
@@ -76,18 +71,24 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server with port fallback
-const startServer = async (port) => {
+// Start server with MongoDB connection
+const startServer = async () => {
   try {
-    const server = app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
+    // Connect to MongoDB
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log('MongoDB Connected');
+
+    // Start the server
+    const PORT = process.env.PORT || 5000;
+    const server = app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
     });
 
     server.on('error', (error) => {
       if (error.code === 'EADDRINUSE') {
-        console.log(`Port ${port} is already in use. Trying alternative port...`);
+        console.log(`Port ${PORT} is already in use. Trying alternative port...`);
         server.close();
-        startServer(port + 1);
+        startServer();
       } else {
         console.error('Server error:', error);
         process.exit(1);
@@ -99,5 +100,4 @@ const startServer = async (port) => {
   }
 };
 
-const PORT = process.env.PORT || 5000;
-startServer(PORT); 
+startServer(); 
