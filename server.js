@@ -11,6 +11,11 @@ const app = express();
 // Debug environment variables
 console.log('Environment:', process.env.NODE_ENV);
 console.log('MongoDB URI exists:', !!process.env.MONGODB_URI);
+if (process.env.MONGODB_URI) {
+  // Log the first part of the URI (without credentials) for debugging
+  const uriParts = process.env.MONGODB_URI.split('@');
+  console.log('MongoDB URI format:', uriParts[0].split('://')[0] + '://****@' + uriParts[1]);
+}
 
 // Add Content Security Policy headers
 app.use((req, res, next) => {
@@ -37,8 +42,16 @@ if (!mongoUri) {
   process.exit(1);
 }
 
+// MongoDB connection options
+const mongooseOptions = {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+};
+
 // Connect to MongoDB first
-mongoose.connect(mongoUri)
+mongoose.connect(mongoUri, mongooseOptions)
   .then(async () => {
     console.log('MongoDB Connected');
     
@@ -94,5 +107,6 @@ mongoose.connect(mongoUri)
   })
   .catch(err => {
     console.error('MongoDB connection error:', err);
+    console.error('Connection string format:', mongoUri.startsWith('mongodb+srv://') ? 'Valid' : 'Invalid');
     process.exit(1);
   }); 
