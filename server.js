@@ -26,13 +26,18 @@ app.use(cors({
   credentials: true
 }));
 
+// MongoDB connection
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('MongoDB Connected'))
+  .catch(err => console.error('MongoDB connection error:', err));
+
 // Session configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI,
+    client: mongoose.connection.getClient(),
     ttl: 24 * 60 * 60 // 1 day
   }),
   cookie: {
@@ -41,11 +46,6 @@ app.use(session({
     maxAge: 24 * 60 * 60 * 1000 // 1 day
   }
 }));
-
-// MongoDB connection
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('MongoDB Connected'))
-  .catch(err => console.error('MongoDB connection error:', err));
 
 // Authentication Middleware
 app.use((req, res, next) => {
