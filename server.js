@@ -44,8 +44,6 @@ if (!mongoUri) {
 
 // MongoDB connection options
 const mongooseOptions = {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
   serverSelectionTimeoutMS: 5000,
   socketTimeoutMS: 45000,
 };
