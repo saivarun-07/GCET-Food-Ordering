@@ -7,7 +7,8 @@ const createSessionStore = () => {
     throw new Error('MONGODB_URI is not defined in environment variables');
   }
 
-  return MongoStore.create({
+  // Create a new MongoStore instance directly
+  return new MongoStore({
     mongoUrl: mongoUri,
     collectionName: 'sessions',
     ttl: 24 * 60 * 60 // 1 day
