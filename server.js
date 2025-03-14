@@ -39,7 +39,7 @@ if (!mongoUri) {
 
 // Connect to MongoDB first
 mongoose.connect(mongoUri)
-  .then(() => {
+  .then(async () => {
     console.log('MongoDB Connected');
     
     // Session configuration
@@ -47,7 +47,7 @@ mongoose.connect(mongoUri)
       secret: process.env.SESSION_SECRET || 'your-secret-key',
       resave: false,
       saveUninitialized: false,
-      store: createSessionStore(),
+      store: await createSessionStore(),
       cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,

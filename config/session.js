@@ -1,15 +1,10 @@
 const MongoStore = require('connect-mongo');
+const mongoose = require('mongoose');
 
 const createSessionStore = () => {
-  const mongoUri = process.env.MONGODB_URI;
-  
-  if (!mongoUri) {
-    throw new Error('MONGODB_URI is not defined in environment variables');
-  }
-
-  // Create a new MongoStore instance directly
-  return new MongoStore({
-    mongoUrl: mongoUri,
+  // Use the existing mongoose connection
+  return MongoStore.create({
+    client: mongoose.connection.getClient(),
     collectionName: 'sessions',
     ttl: 24 * 60 * 60 // 1 day
   });
