@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: gcet-food-ordering-backend
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: FAST2SMS_API_KEY
+        sync: false
+      - key: CLIENT_URL
+        value: https://gcet-food-ordering-frontend.onrender.com
+  - type: static
+    name: gcet-food-ordering-frontend
+    env: static
+    buildCommand: cd client && npm install && npm run build
+    staticPublishPath: client/build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://gcet-food-ordering-backend.onrender.com 
