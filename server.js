@@ -26,6 +26,11 @@ app.use(cors({
   credentials: true
 }));
 
+// MongoDB connection
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('MongoDB Connected'))
+  .catch(err => console.error('MongoDB connection error:', err));
+
 // Session configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key',
@@ -33,6 +38,7 @@ app.use(session({
   saveUninitialized: false,
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
+    collectionName: 'sessions',
     ttl: 24 * 60 * 60 // 1 day
   }),
   cookie: {
@@ -71,33 +77,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server with MongoDB connection
-const startServer = async () => {
-  try {
-    // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('MongoDB Connected');
-
-    // Start the server
-    const PORT = process.env.PORT || 5000;
-    const server = app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-
-    server.on('error', (error) => {
-      if (error.code === 'EADDRINUSE') {
-        console.log(`Port ${PORT} is already in use. Trying alternative port...`);
-        server.close();
-        startServer();
-      } else {
-        console.error('Server error:', error);
-        process.exit(1);
-      }
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
-};
-
-startServer(); 
+// Start server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+}); 
