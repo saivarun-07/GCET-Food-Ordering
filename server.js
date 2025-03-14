@@ -2,11 +2,15 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const session = require('express-session');
-const MongoStore = require('connect-mongo');
 const path = require('path');
+const createSessionStore = require('./config/session');
 require('dotenv').config();
 
 const app = express();
+
+// Debug environment variables
+console.log('Environment:', process.env.NODE_ENV);
+console.log('MongoDB URI exists:', !!process.env.MONGODB_URI);
 
 // Add Content Security Policy headers
 app.use((req, res, next) => {
@@ -27,26 +31,30 @@ app.use(cors({
 }));
 
 // MongoDB connection
-mongoose.connect(process.env.MONGODB_URI)
+const mongoUri = process.env.MONGODB_URI;
+if (!mongoUri) {
+  console.error('MONGODB_URI is not defined in environment variables');
+  process.exit(1);
+}
+
+mongoose.connect(mongoUri)
   .then(() => console.log('MongoDB Connected'))
   .catch(err => console.error('MongoDB connection error:', err));
 
 // Session configuration
-app.use(session({
+const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,
-  store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI,
-    collectionName: 'sessions',
-    ttl: 24 * 60 * 60 // 1 day
-  }),
+  store: createSessionStore(),
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000 // 1 day
   }
-}));
+};
+
+app.use(session(sessionConfig));
 
 // Authentication Middleware
 app.use((req, res, next) => {
