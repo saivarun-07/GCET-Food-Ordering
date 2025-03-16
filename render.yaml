@@ -28,7 +28,7 @@ services:
   - type: static
     name: gcet-food-ordering-frontend
     env: static
-    buildCommand: cd client && npm install && npm run build
+    buildCommand: chmod +x frontend-build.sh && ./frontend-build.sh
     staticPublishPath: client/build
     envVars:
       - key: REACT_APP_API_URL
