@@ -26,14 +26,18 @@ const corsOptions = {
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-  exposedHeaders: ['Content-Length', 'X-Confirm-Delete'],
-  maxAge: 86400 // preflight results cache for 24 hours
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Cookie'],
+  exposedHeaders: ['Content-Length', 'X-Confirm-Delete', 'Set-Cookie'],
+  maxAge: 86400, // preflight results cache for 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
-app.use(cors(corsOptions));
 
-// Add CORS preflight handling for all routes
+// Enable pre-flight requests for all routes
 app.options('*', cors(corsOptions));
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
 
 // Log CORS settings
 console.log('CORS origins:', corsOptions.origin);
@@ -77,7 +81,9 @@ mongoose.connect(mongoUri, mongooseOptions)
       cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000 // 1 day
+        maxAge: 24 * 60 * 60 * 1000, // 1 day
+        sameSite: 'none',  // Important for cross-site requests
+        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined  // Allow cookies across subdomains
       }
     };
 

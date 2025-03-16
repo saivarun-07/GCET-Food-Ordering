@@ -168,6 +168,7 @@ router.post('/send-otp', async (req, res) => {
 router.post('/verify-otp', async (req, res) => {
   try {
     const { phone, otp } = req.body;
+    console.log('Verifying OTP for phone:', phone, 'OTP:', otp);
 
     if (!phone || !otp) {
       return res.status(400).json({ message: 'Phone number and OTP are required' });
@@ -176,6 +177,7 @@ router.post('/verify-otp', async (req, res) => {
     const user = await User.findOne({ phone });
 
     if (!user) {
+      console.log('User not found for phone:', phone);
       return res.status(404).json({ message: 'User not found' });
     }
 
@@ -186,15 +188,17 @@ router.post('/verify-otp', async (req, res) => {
       user.otpData.otp !== otp || 
       now > new Date(user.otpData.expiresAt)
     ) {
+      console.log('Invalid or expired OTP. Expected:', user.otpData?.otp, 'Got:', otp);
       return res.status(401).json({ message: 'Invalid or expired OTP' });
     }
 
     // Clear OTP data after successful verification
     user.otpData = undefined;
     await user.save();
+    console.log('OTP verified successfully for user:', user._id);
 
-    // Set user in session
-    req.session.user = {
+    // Create user data for session
+    const userData = {
       _id: user._id,
       phone: user.phone,
       name: user.name,
@@ -204,15 +208,26 @@ router.post('/verify-otp', async (req, res) => {
       profileCompleted: user.profileCompleted
     };
 
-    res.json({
-      _id: user._id,
-      phone: user.phone,
-      name: user.name,
-      role: user.role,
-      block: user.block,
-      classNumber: user.classNumber,
-      profileCompleted: user.profileCompleted
+    // Set user in session
+    req.session.user = userData;
+    
+    // Save session explicitly and wait for completion
+    await new Promise((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) {
+          console.error('Session save error:', err);
+          reject(err);
+        } else {
+          console.log('Session saved successfully');
+          resolve();
+        }
+      });
     });
+
+    console.log('Session user set:', req.session.user);
+    console.log('Session ID:', req.session.id);
+    
+    res.json(userData);
   } catch (error) {
     console.error('Error in verify-otp:', error);
     res.status(500).json({ message: 'Error verifying OTP', error: error.message });
