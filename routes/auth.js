@@ -438,4 +438,52 @@ router.put('/profile', async (req, res) => {
   }
 });
 
+// TEMPORARY ROUTE TO CREATE ADMIN USER - REMOVE AFTER USE
+router.post('/create-admin', async (req, res) => {
+  try {
+    const { phone, name, secretKey } = req.body;
+    
+    // Security check - replace 'gcet-admin-secret' with your own secret password
+    if (secretKey !== 'gcet-admin-secret') {
+      return res.status(401).json({ message: 'Invalid secret key' });
+    }
+    
+    let user = await User.findOne({ phone });
+    
+    if (user) {
+      // Update existing user to admin
+      user.role = 'admin';
+      await user.save();
+      console.log(`User with phone ${phone} updated to admin role`);
+      res.json({ 
+        message: 'User updated to admin role', 
+        userId: user._id,
+        instructions: 'You can now use this phone number to login as admin'
+      });
+    } else {
+      // Create new admin user
+      const placeholderEmail = `admin_${phone}@example.com`;
+      user = new User({
+        phone,
+        name,
+        email: placeholderEmail,
+        role: 'admin',
+        block: "",
+        classNumber: "",
+        profileCompleted: true
+      });
+      await user.save();
+      console.log(`New admin user created with phone ${phone}`);
+      res.json({ 
+        message: 'Admin user created successfully', 
+        userId: user._id,
+        instructions: 'You can now use this phone number to login as admin'
+      });
+    }
+  } catch (error) {
+    console.error('Error creating admin user:', error);
+    res.status(500).json({ message: 'Error creating admin user', error: error.message });
+  }
+});
+
 module.exports = router; 
