@@ -1,8 +1,9 @@
 services:
+  # Backend API Service
   - type: web
     name: gcet-food-ordering-backend
     env: node
-    buildCommand: chmod +x build.sh && ./build.sh
+    buildCommand: npm install
     startCommand: node server.js
     envVars:
       - key: NODE_ENV
@@ -15,6 +16,15 @@ services:
         sync: false
       - key: CLIENT_URL
         value: https://gcet-food-ordering-frontend.onrender.com
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: /api/$1
+      - type: rewrite
+        source: /api/health
+        destination: /api/health
+
+  # Frontend Static Site
   - type: static
     name: gcet-food-ordering-frontend
     env: static

@@ -80,13 +80,10 @@ mongoose.connect(mongoUri, mongooseOptions)
     app.use('/api/orders', require('./routes/orders'));
     app.use('/api/menu', require('./routes/menu'));
 
-    // Serve static files in production
-    if (process.env.NODE_ENV === 'production') {
-      app.use(express.static(path.join(__dirname, 'client/build')));
-      app.get('*', (req, res) => {
-        res.sendFile(path.resolve(__dirname, 'client/build', 'index.html'));
-      });
-    }
+    // API Health check endpoint
+    app.get('/api/health', (req, res) => {
+      res.status(200).json({ status: 'ok', message: 'API is running' });
+    });
 
     // Error handling middleware
     app.use((err, req, res, next) => {
@@ -100,7 +97,7 @@ mongoose.connect(mongoUri, mongooseOptions)
     // Start server
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+      console.log(`API server running on port ${PORT}`);
     });
   })
   .catch(err => {
