@@ -17,6 +17,27 @@ if (process.env.MONGODB_URI) {
   console.log('MongoDB URI format:', uriParts[0].split('://')[0] + '://****@' + uriParts[1]);
 }
 
+// Configure CORS - Setup CORS early before other middleware
+const corsOptions = {
+  origin: [
+    'https://gcet-food-ordering-frontend.onrender.com',
+    'https://gcet-food-ordering-frontend-oo9e.onrender.com',
+    'http://localhost:3000'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Content-Length', 'X-Confirm-Delete'],
+  maxAge: 86400 // preflight results cache for 24 hours
+};
+app.use(cors(corsOptions));
+
+// Add CORS preflight handling for all routes
+app.options('*', cors(corsOptions));
+
+// Log CORS settings
+console.log('CORS origins:', corsOptions.origin);
+
 // Add Content Security Policy headers
 app.use((req, res, next) => {
   res.setHeader(
@@ -26,24 +47,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Middleware
+// Other Middleware
 app.use(express.json());
-
-// Configure CORS
-const corsOptions = {
-  origin: [
-    'https://gcet-food-ordering-frontend.onrender.com',
-    'https://gcet-food-ordering-frontend-oo9e.onrender.com',
-    'http://localhost:3000'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-};
-app.use(cors(corsOptions));
-
-// Log CORS settings
-console.log('CORS origins:', corsOptions.origin);
 
 // MongoDB connection
 const mongoUri = process.env.MONGODB_URI;
