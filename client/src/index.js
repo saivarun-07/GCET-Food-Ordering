@@ -15,13 +15,19 @@ axios.defaults.withCredentials = true; // Include credentials in requests
 // In development, the proxy in package.json will handle this
 axios.defaults.baseURL = process.env.REACT_APP_API_URL || '';
 
+// Add request interceptor to log requests and add /api prefix if needed
+axios.interceptors.request.use(request => {
+  // Log requests in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Axios Request:', request.method, request.url, request.data);
+  }
+  
+  // Add additional request processing here if needed
+  return request;
+});
+
 // Log requests in development
 if (process.env.NODE_ENV === 'development') {
-  axios.interceptors.request.use(request => {
-    console.log('Axios Request:', request.method, request.url, request.data);
-    return request;
-  });
-
   axios.interceptors.response.use(
     response => {
       console.log('Axios Response:', response.status, response.data);

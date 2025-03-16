@@ -75,6 +75,21 @@ mongoose.connect(mongoUri, mongooseOptions)
       next();
     });
 
+    // Root path handler
+    app.get('/', (req, res) => {
+      res.status(200).json({ 
+        message: 'GCET Food Ordering API Server', 
+        status: 'online',
+        endpoints: {
+          auth: '/api/auth',
+          orders: '/api/orders',
+          menu: '/api/menu',
+          health: '/api/health'
+        },
+        frontend: process.env.CLIENT_URL
+      });
+    });
+
     // Routes
     app.use('/api/auth', require('./routes/auth'));
     app.use('/api/orders', require('./routes/orders'));
