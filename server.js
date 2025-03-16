@@ -28,12 +28,18 @@ app.use((req, res, next) => {
 
 // Middleware
 app.use(express.json());
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.CLIENT_URL 
-    : 'http://localhost:3000',
-  credentials: true
-}));
+
+// Configure CORS
+const corsOptions = {
+  origin: ['https://gcet-food-ordering-frontend.onrender.com', 'http://localhost:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+app.use(cors(corsOptions));
+
+// Log CORS settings
+console.log('CORS origins:', corsOptions.origin);
 
 // MongoDB connection
 const mongoUri = process.env.MONGODB_URI;

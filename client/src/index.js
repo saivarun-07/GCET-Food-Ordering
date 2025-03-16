@@ -11,11 +11,10 @@ import axios from 'axios';
 // Configure axios
 axios.defaults.withCredentials = true; // Include credentials in requests
 
-// Set base URL - useful if the API is hosted on a different domain in production
-// In development, the proxy in package.json will handle this
-axios.defaults.baseURL = process.env.REACT_APP_API_URL || '';
+// Explicitly set the backend API URL
+axios.defaults.baseURL = 'https://gcet-food-ordering-backend.onrender.com';
 
-// Add request interceptor to log requests and add /api prefix if needed
+// Add request interceptor to log requests
 axios.interceptors.request.use(request => {
   // Log requests in development
   if (process.env.NODE_ENV === 'development') {
