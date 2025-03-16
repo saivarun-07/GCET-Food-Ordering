@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Static Site Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            text-align: center;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Static Site Test Page</h1>
+        <p>If you're seeing this page, your static site hosting on Render is working correctly!</p>
+        <p>This is a test page to verify that the static site deployment is functional.</p>
+        <p>Current time: <span id="current-time"></span></p>
+    </div>
+
+    <script>
+        document.getElementById('current-time').textContent = new Date().toLocaleString();
+    </script>
+</body>
+</html> 
