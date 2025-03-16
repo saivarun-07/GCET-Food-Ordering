@@ -14,17 +14,16 @@ axios.defaults.withCredentials = true; // Include credentials in requests
 // Explicitly set the backend API URL
 axios.defaults.baseURL = 'https://gcet-food-ordering-backend.onrender.com';
 
-// Remove the incorrect Access-Control-Allow-Origin header
-// The server should set this header, not the client
-
-// Add request interceptor to log requests
+// Add request interceptor to log requests and ensure credentials
 axios.interceptors.request.use(request => {
+  // Always ensure credentials are included in every request
+  request.withCredentials = true;
+  
   // Log requests in development
   if (process.env.NODE_ENV === 'development') {
     console.log('Axios Request:', request.method, request.url, request.data);
   }
   
-  // Add additional request processing here if needed
   return request;
 });
 

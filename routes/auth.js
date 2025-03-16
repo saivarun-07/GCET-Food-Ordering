@@ -236,9 +236,15 @@ router.post('/verify-otp', async (req, res) => {
 
 // Get current user
 router.get('/current-user', (req, res) => {
+  console.log('Current user request received');
+  console.log('Session ID:', req.session.id);
+  console.log('Cookies:', req.headers.cookie);
+  
   if (req.session.user) {
+    console.log('User found in session:', req.session.user._id);
     res.json(req.session.user);
   } else {
+    console.log('No user in session');
     res.status(401).json({ message: 'Not authenticated' });
   }
 });
@@ -256,11 +262,16 @@ router.get('/logout', (req, res) => {
 // Update user profile (block and class number)
 router.put('/profile', async (req, res) => {
   try {
+    console.log('Profile update request received');
+    console.log('Session:', req.session.id, 'User in session:', !!req.session.user);
+    
     if (!req.session.user) {
+      console.log('Not authenticated - no user in session');
       return res.status(401).json({ message: 'Not authenticated' });
     }
 
     const { block, classNumber } = req.body;
+    console.log('Updating profile for user:', req.session.user._id, 'with block:', block, 'class:', classNumber);
     
     // Validate inputs
     if (!block || !classNumber) {
@@ -279,6 +290,13 @@ router.put('/profile', async (req, res) => {
       { new: true }
     );
 
+    if (!user) {
+      console.log('User not found in database:', req.session.user._id);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    console.log('User profile updated in database:', user._id);
+
     // Update session with new user data
     req.session.user = {
       _id: user._id,
@@ -290,8 +308,23 @@ router.put('/profile', async (req, res) => {
       profileCompleted: user.profileCompleted
     };
 
+    // Save session explicitly
+    await new Promise((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) {
+          console.error('Session save error:', err);
+          reject(err);
+        } else {
+          console.log('Session saved successfully after profile update');
+          resolve();
+        }
+      });
+    });
+
+    console.log('Sending updated user data to client');
     res.json(req.session.user);
   } catch (error) {
+    console.error('Error updating profile:', error);
     res.status(500).json({ message: 'Error updating profile', error: error.message });
   }
 });
