@@ -22,7 +22,8 @@ const corsOptions = {
   origin: [
     'https://gcet-food-ordering-frontend.onrender.com',
     'https://gcet-food-ordering-frontend-oo9e.onrender.com',
-    'http://localhost:3000'
+    'http://localhost:3000',
+    'null'  // Allow requests from files opened directly in browser
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
