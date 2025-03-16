@@ -21,7 +21,7 @@ if (process.env.MONGODB_URI) {
 app.use((req, res, next) => {
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://gcet-food-ordering-backend.onrender.com"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://gcet-food-ordering-backend.onrender.com https://gcet-food-ordering-frontend-oo9e.onrender.com"
   );
   next();
 });
@@ -31,7 +31,11 @@ app.use(express.json());
 
 // Configure CORS
 const corsOptions = {
-  origin: ['https://gcet-food-ordering-frontend.onrender.com', 'http://localhost:3000'],
+  origin: [
+    'https://gcet-food-ordering-frontend.onrender.com',
+    'https://gcet-food-ordering-frontend-oo9e.onrender.com',
+    'http://localhost:3000'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']

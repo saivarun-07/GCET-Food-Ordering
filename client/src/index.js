@@ -14,6 +14,9 @@ axios.defaults.withCredentials = true; // Include credentials in requests
 // Explicitly set the backend API URL
 axios.defaults.baseURL = 'https://gcet-food-ordering-backend.onrender.com';
 
+// Add headers for CORS
+axios.defaults.headers.common['Access-Control-Allow-Origin'] = 'https://gcet-food-ordering-frontend-oo9e.onrender.com';
+
 // Add request interceptor to log requests
 axios.interceptors.request.use(request => {
   // Log requests in development
