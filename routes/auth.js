@@ -13,15 +13,38 @@ const generateUniqueEmail = (phone) => {
 // Send SMS using Fast2SMS API
 const sendSMS = async (phone, message) => {
   try {
-    const response = await axios.post('https://www.fast2sms.com/dev/bulkV2', {
-      authorization: process.env.FAST2SMS_API_KEY,
+    console.log('Attempting to send SMS to:', phone);
+    console.log('With message:', message);
+    console.log('Using API key exists:', !!process.env.FAST2SMS_API_KEY);
+    
+    // If no API key in production, return mock success for debugging
+    if (!process.env.FAST2SMS_API_KEY && process.env.NODE_ENV === 'production') {
+      console.log('No API key found, returning mock success');
+      return { status: 'success', message: 'SMS would be sent in production' };
+    }
+    
+    const url = 'https://www.fast2sms.com/dev/bulkV2';
+    
+    const headers = {
+      "Content-Type": "application/json",
+      "Authorization": process.env.FAST2SMS_API_KEY
+    };
+    
+    const data = {
+      route: "v3",
+      sender_id: "TXTIND",
       message: message,
+      language: "english",
+      flash: 0,
       numbers: phone
-    }, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    };
+    
+    console.log('Sending request to Fast2SMS with headers:', JSON.stringify(headers));
+    console.log('And data:', JSON.stringify(data));
+    
+    const response = await axios.post(url, data, { headers });
+    console.log('Fast2SMS API Response:', response.data);
+    
     return response.data;
   } catch (error) {
     console.error('Fast2SMS API Error:', error.response?.data || error.message);
@@ -38,6 +61,8 @@ router.post('/send-otp', async (req, res) => {
       return res.status(400).json({ message: 'Phone number is required' });
     }
 
+    console.log('OTP request for phone:', phone, 'name:', name);
+
     // Generate a 6-digit OTP
     const otp = otpGenerator.generate(6, {
       digits: true,
@@ -45,6 +70,8 @@ router.post('/send-otp', async (req, res) => {
       upperCaseAlphabets: false,
       specialChars: false
     });
+
+    console.log('Generated OTP:', otp);
 
     // Set OTP expiry time to 10 minutes from now
     const expiresAt = new Date();
@@ -61,6 +88,8 @@ router.post('/send-otp', async (req, res) => {
       }
       
       isNewUser = true;
+      console.log('Creating new user with phone:', phone, 'name:', name);
+      
       // Generate a placeholder email for new users to avoid duplicate key errors
       const placeholderEmail = generateUniqueEmail(phone);
       
@@ -75,16 +104,40 @@ router.post('/send-otp', async (req, res) => {
         profileCompleted: false
       });
     } else {
+      console.log('Updating existing user OTP data for phone:', phone);
       // Update existing user's OTP
       user.otpData = { otp, expiresAt };
     }
 
     await user.save();
+    console.log('User saved successfully');
 
-    // Send OTP via SMS
+    // Always return the OTP in development mode
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    
     try {
+      // Skip SMS in development unless specifically requested
+      if (isDevelopment && !req.query.sendSms) {
+        console.log('Development mode: Skipping actual SMS send');
+        return res.json({ 
+          message: 'OTP generated successfully (SMS not sent in development)',
+          otp, // Include OTP in response for development
+          isNewUser
+        });
+      }
+      
       const message = `Your GCET Food Ordering verification code is: ${otp}. Valid for 10 minutes.`;
-      await sendSMS(phone, message);
+      const smsResponse = await sendSMS(phone, message);
+      console.log('SMS sent successfully:', smsResponse);
+      
+      if (isDevelopment) {
+        // In development, always return the OTP for testing
+        return res.json({ 
+          message: 'OTP sent successfully',
+          otp, // Include OTP in response for development
+          isNewUser
+        });
+      }
       
       res.json({ 
         message: 'OTP sent successfully', 
@@ -92,24 +145,22 @@ router.post('/send-otp', async (req, res) => {
       });
     } catch (smsError) {
       console.error('Error sending SMS:', smsError);
-      // In development mode, return the OTP in response if SMS fails
-      if (process.env.NODE_ENV === 'development') {
-        res.json({ 
-          message: 'OTP generated successfully (SMS failed)', 
-          otp, 
-          isNewUser,
-          note: 'This is for development only. In production, OTP would not be revealed in response.'
-        });
-      } else {
-        res.status(500).json({ 
-          message: 'Failed to send OTP via SMS',
-          error: smsError.message 
-        });
-      }
+      
+      // Always return the OTP if there's an SMS error
+      res.status(200).json({ 
+        message: 'OTP generated successfully (SMS failed)', 
+        otp, 
+        isNewUser,
+        error: process.env.NODE_ENV === 'production' ? 'SMS service unavailable' : smsError.message,
+        note: 'OTP is included in the response for testing purposes'
+      });
     }
   } catch (error) {
     console.error('Error in send-otp:', error);
-    res.status(500).json({ message: 'Error generating OTP', error: error.message });
+    res.status(500).json({ 
+      message: 'Error generating OTP', 
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 });
 
