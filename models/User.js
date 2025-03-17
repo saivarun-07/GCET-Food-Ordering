@@ -22,7 +22,8 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true
+    required: true,
+    minlength: 6
   },
   role: {
     type: String,
@@ -33,9 +34,48 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isPhoneVerified: {
+    type: Boolean,
+    default: false
+  },
   verificationToken: String,
   verificationTokenExpires: Date,
+  otpData: {
+    otp: String,
+    expiresAt: Date
+  },
+  authMethods: [{
+    type: String,
+    enum: ['email', 'phone', 'google', 'facebook'],
+    default: ['email']
+  }],
+  socialProfiles: {
+    google: {
+      id: String,
+      email: String
+    },
+    facebook: {
+      id: String,
+      email: String
+    }
+  },
+  lastLogin: Date,
+  loginAttempts: {
+    count: { type: Number, default: 0 },
+    lastAttempt: Date
+  },
+  accountLocked: {
+    type: Boolean,
+    default: false
+  },
+  accountLockedUntil: Date,
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
   createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
     type: Date,
     default: Date.now
   },
@@ -50,10 +90,6 @@ const userSchema = new mongoose.Schema({
   profileCompleted: {
     type: Boolean,
     default: false
-  },
-  otpData: {
-    otp: String,
-    expiresAt: Date
   }
 }, {
   timestamps: true
@@ -72,9 +108,54 @@ userSchema.pre('save', async function(next) {
   }
 });
 
-// Method to compare password
+// Compare password method
 userSchema.methods.comparePassword = async function(candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+  try {
+    return await bcrypt.compare(candidatePassword, this.password);
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Update timestamp on save
+userSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
+});
+
+// Method to increment login attempts
+userSchema.methods.incrementLoginAttempts = async function() {
+  this.loginAttempts.count += 1;
+  this.loginAttempts.lastAttempt = Date.now();
+  
+  // Lock account after 5 failed attempts for 30 minutes
+  if (this.loginAttempts.count >= 5) {
+    this.accountLocked = true;
+    this.accountLockedUntil = new Date(Date.now() + 30 * 60 * 1000);
+  }
+  
+  await this.save();
+};
+
+// Method to reset login attempts
+userSchema.methods.resetLoginAttempts = async function() {
+  this.loginAttempts.count = 0;
+  this.accountLocked = false;
+  this.accountLockedUntil = undefined;
+  await this.save();
+};
+
+// Method to check if account is locked
+userSchema.methods.isAccountLocked = function() {
+  if (!this.accountLocked) return false;
+  
+  if (this.accountLockedUntil && Date.now() > this.accountLockedUntil) {
+    this.accountLocked = false;
+    this.accountLockedUntil = undefined;
+    return false;
+  }
+  
+  return true;
 };
 
 const User = mongoose.model('User', userSchema);

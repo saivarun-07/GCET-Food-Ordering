@@ -5,10 +5,25 @@ const otpGenerator = require('otp-generator');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const { generateVerificationToken, sendVerificationEmail } = require('../utils/emailService');
+const rateLimit = require('express-rate-limit');
+const crypto = require('crypto');
+
+// Rate limiting
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts
+  message: 'Too many login attempts. Please try again later.'
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // 3 attempts
+  message: 'Too many registration attempts. Please try again later.'
+});
 
 // JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-key';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1d';
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -286,19 +301,21 @@ router.get('/current-user', verifyToken, async (req, res) => {
 });
 
 // Logout
-router.get('/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      return res.status(500).json({ message: 'Error logging out' });
-    }
+router.post('/logout', verifyToken, async (req, res) => {
+  try {
+    // In a production environment, you might want to invalidate the token
+    // by adding it to a blacklist or using a token version
     res.json({ message: 'Logged out successfully' });
-  });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ message: 'Error logging out', error: error.message });
+  }
 });
 
 // Update user profile
 router.put('/profile', verifyToken, async (req, res) => {
   try {
-    const { name, phone } = req.body;
+    const { name, phone, email } = req.body;
     const user = await User.findById(req.user.userId);
 
     if (!user) {
@@ -307,6 +324,13 @@ router.put('/profile', verifyToken, async (req, res) => {
 
     if (name) user.name = name;
     if (phone) user.phone = phone;
+    if (email && email !== user.email) {
+      user.email = email;
+      user.isEmailVerified = false;
+      user.verificationToken = generateVerificationToken();
+      user.verificationTokenExpires = new Date(Date.now() + 10 * 60 * 1000);
+      await sendVerificationEmail(email, user.verificationToken);
+    }
 
     await user.save();
 
@@ -372,45 +396,67 @@ router.post('/create-admin', async (req, res) => {
 });
 
 // Register new user
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
-    const { name, email, phone, password } = req.body;
+    const { name, email, phone, password, authMethod = 'email' } = req.body;
+
+    // Validate required fields based on auth method
+    if (authMethod === 'email' && (!email || !password)) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+    if (authMethod === 'phone' && !phone) {
+      return res.status(400).json({ message: 'Phone number is required' });
+    }
 
     // Check if user already exists
-    const existingUser = await User.findOne({ 
-      $or: [{ email }, { phone }] 
+    const existingUser = await User.findOne({
+      $or: [
+        { email: email || undefined },
+        { phone: phone || undefined },
+        { 'socialProfiles.google.email': email },
+        { 'socialProfiles.facebook.email': email }
+      ]
     });
 
     if (existingUser) {
-      return res.status(400).json({ 
-        message: 'User with this email or phone number already exists' 
+      return res.status(400).json({
+        message: 'User with this email or phone number already exists'
       });
     }
 
-    // Generate verification token
-    const verificationToken = generateVerificationToken();
-    const verificationTokenExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    // Create new user
-    const user = new User({
+    // Create user based on auth method
+    const userData = {
       name,
-      email,
-      phone,
-      password,
-      verificationToken,
-      verificationTokenExpires
-    });
+      authMethods: [authMethod]
+    };
 
+    if (authMethod === 'email') {
+      userData.email = email;
+      userData.password = password;
+      userData.verificationToken = generateVerificationToken();
+      userData.verificationTokenExpires = new Date(Date.now() + 10 * 60 * 1000);
+    } else if (authMethod === 'phone') {
+      userData.phone = phone;
+      userData.isPhoneVerified = true; // Phone verification handled separately
+    }
+
+    const user = new User(userData);
     await user.save();
 
-    // Send verification email
-    const emailSent = await sendVerificationEmail(email, verificationToken);
-
-    res.status(201).json({
-      message: 'Registration successful. Please check your email for verification code.',
-      emailSent,
-      verificationToken: emailSent ? undefined : verificationToken // Include token only if email fails
-    });
+    // Send verification email if using email auth
+    if (authMethod === 'email') {
+      const emailSent = await sendVerificationEmail(email, user.verificationToken);
+      res.status(201).json({
+        message: 'Registration successful. Please check your email for verification code.',
+        emailSent,
+        verificationToken: emailSent ? undefined : user.verificationToken
+      });
+    } else {
+      res.status(201).json({
+        message: 'Registration successful',
+        userId: user._id
+      });
+    }
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ message: 'Error registering user', error: error.message });
@@ -501,33 +547,64 @@ router.post('/resend-verification', async (req, res) => {
 });
 
 // Login user
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, phone, password, authMethod = 'email' } = req.body;
 
-    const user = await User.findOne({ email });
+    // Find user based on auth method
+    let user;
+    if (authMethod === 'email') {
+      user = await User.findOne({ email });
+    } else if (authMethod === 'phone') {
+      user = await User.findOne({ phone });
+    }
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    if (!user.isEmailVerified) {
-      return res.status(401).json({ 
-        message: 'Please verify your email first',
-        email: user.email
+    // Check if account is locked
+    if (user.isAccountLocked()) {
+      return res.status(401).json({
+        message: 'Account is locked. Please try again later.',
+        lockedUntil: user.accountLockedUntil
       });
     }
 
-    const isMatch = await user.comparePassword(password);
+    // Verify credentials based on auth method
+    let isValid = false;
+    if (authMethod === 'email') {
+      if (!user.isEmailVerified) {
+        return res.status(401).json({
+          message: 'Please verify your email first',
+          email: user.email
+        });
+      }
+      isValid = await user.comparePassword(password);
+    } else if (authMethod === 'phone') {
+      if (!user.isPhoneVerified) {
+        return res.status(401).json({
+          message: 'Please verify your phone number first'
+        });
+      }
+      isValid = true; // Phone verification handled separately
+    }
 
-    if (!isMatch) {
+    if (!isValid) {
+      await user.incrementLoginAttempts();
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    // Reset login attempts on successful login
+    await user.resetLoginAttempts();
+    user.lastLogin = new Date();
+    await user.save();
+
+    // Generate JWT token
     const token = jwt.sign(
       { userId: user._id, role: user.role },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: JWT_EXPIRES_IN }
     );
 
     res.json({
@@ -536,12 +613,73 @@ router.post('/login', async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        phone: user.phone,
         role: user.role
       }
     });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Error logging in', error: error.message });
+  }
+});
+
+// Forgot password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+    user.resetPasswordExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    await user.save();
+
+    // Send reset email
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    await sendVerificationEmail(email, resetUrl, 'password-reset');
+
+    res.json({ message: 'Password reset email sent' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ message: 'Error processing request', error: error.message });
+  }
+});
+
+// Reset password
+router.post('/reset-password/:token', async (req, res) => {
+  try {
+    const { password } = req.body;
+    const resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(req.params.token)
+      .digest('hex');
+
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    }
+
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.json({ message: 'Password reset successful' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Error resetting password', error: error.message });
   }
 });
 

@@ -29,6 +29,7 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState('');
   const [apiError, setApiError] = useState(null);
   const [verificationToken, setVerificationToken] = useState(null);
+  const [authMethod, setAuthMethod] = useState('email'); // 'email', 'phone', 'google', 'facebook'
 
   useEffect(() => {
     checkAuth();
@@ -60,8 +61,8 @@ export const AuthProvider = ({ children }) => {
       setError('');
       setApiError(null);
       
-      console.log('Registering user:', userData);
-      const response = await api.post('/api/auth/register', userData);
+      console.log('Registering user:', { ...userData, authMethod });
+      const response = await api.post('/api/auth/register', { ...userData, authMethod });
       console.log('Registration response:', response.data);
       
       if (response.data.verificationToken) {
@@ -134,13 +135,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (email, password) => {
+  const login = async (credentials) => {
     try {
       setError('');
       setApiError(null);
       
-      console.log('Logging in:', { email });
-      const response = await api.post('/api/auth/login', { email, password });
+      console.log('Logging in:', { ...credentials, authMethod });
+      const response = await api.post('/api/auth/login', { ...credentials, authMethod });
       console.log('Login response:', response.data);
       
       // Store the token
@@ -162,6 +163,48 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const forgotPassword = async (email) => {
+    try {
+      setError('');
+      setApiError(null);
+      
+      console.log('Requesting password reset for:', email);
+      const response = await api.post('/api/auth/forgot-password', { email });
+      console.log('Forgot password response:', response.data);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error requesting password reset:', error);
+      setError(error.response?.data?.message || 'Failed to request password reset');
+      setApiError({
+        message: error.response?.data?.message || 'Failed to request password reset',
+        status: error.response?.status
+      });
+      throw error;
+    }
+  };
+
+  const resetPassword = async (token, password) => {
+    try {
+      setError('');
+      setApiError(null);
+      
+      console.log('Resetting password with token');
+      const response = await api.post(`/api/auth/reset-password/${token}`, { password });
+      console.log('Reset password response:', response.data);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      setError(error.response?.data?.message || 'Failed to reset password');
+      setApiError({
+        message: error.response?.data?.message || 'Failed to reset password',
+        status: error.response?.status
+      });
+      throw error;
+    }
+  };
+
   const resetVerification = () => {
     setVerificationStep('register');
     setVerificationToken(null);
@@ -171,7 +214,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await api.get('/api/auth/logout');
+      await api.post('/api/auth/logout');
       localStorage.removeItem('token');
       setUser(null);
       setApiError(null);
@@ -200,6 +243,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const setAuthenticationMethod = (method) => {
+    setAuthMethod(method);
+  };
+
   return (
     <AuthContext.Provider 
       value={{ 
@@ -215,7 +262,11 @@ export const AuthProvider = ({ children }) => {
         error,
         apiError,
         logout, 
-        updateProfile 
+        updateProfile,
+        forgotPassword,
+        resetPassword,
+        authMethod,
+        setAuthenticationMethod
       }}
     >
       {children}
