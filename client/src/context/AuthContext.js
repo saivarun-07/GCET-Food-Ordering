@@ -6,10 +6,10 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [phoneVerificationStep, setPhoneVerificationStep] = useState('phone'); // 'phone', 'otp'
-  const [phone, setPhone] = useState('');
+  const [verificationStep, setVerificationStep] = useState('register'); // 'register', 'verify', 'login'
   const [error, setError] = useState('');
   const [apiError, setApiError] = useState(null);
+  const [verificationToken, setVerificationToken] = useState(null);
 
   useEffect(() => {
     checkAuth();
@@ -36,46 +36,97 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const sendOTP = async (phoneNumber, name) => {
+  const register = async (userData) => {
     try {
       setError('');
       setApiError(null);
       
-      console.log('Sending OTP request with:', { phone: phoneNumber, name });
-      const response = await axios.post('/api/auth/send-otp', { phone: phoneNumber, name });
-      console.log('OTP response:', response.data);
+      console.log('Registering user:', userData);
+      const response = await axios.post('/api/auth/register', userData);
+      console.log('Registration response:', response.data);
       
-      setPhone(phoneNumber);
-      setPhoneVerificationStep('otp');
+      if (response.data.verificationToken) {
+        setVerificationToken(response.data.verificationToken);
+      }
+      
+      setVerificationStep('verify');
       return response.data;
     } catch (error) {
-      console.error('Error sending OTP:', error);
-      setError(error.response?.data?.message || 'Failed to send OTP');
+      console.error('Error registering:', error);
+      setError(error.response?.data?.message || 'Failed to register');
       setApiError({
-        message: error.response?.data?.message || 'Failed to send OTP',
+        message: error.response?.data?.message || 'Failed to register',
         status: error.response?.status
       });
       throw error;
     }
   };
 
-  const verifyOTP = async (otp) => {
+  const verifyEmail = async (email, token) => {
     try {
       setError('');
       setApiError(null);
       
-      console.log('Verifying OTP with:', { phone, otp });
-      const response = await axios.post('/api/auth/verify-otp', { phone, otp });
-      console.log('Verify OTP response:', response.data);
+      console.log('Verifying email:', { email, token });
+      const response = await axios.post('/api/auth/verify-email', { email, token });
+      console.log('Email verification response:', response.data);
       
       setUser(response.data);
-      setPhoneVerificationStep('phone');
+      setVerificationStep('login');
       return response.data;
     } catch (error) {
-      console.error('Error verifying OTP:', error);
-      setError(error.response?.data?.message || 'Invalid OTP');
+      console.error('Error verifying email:', error);
+      setError(error.response?.data?.message || 'Invalid verification code');
       setApiError({
-        message: error.response?.data?.message || 'Failed to verify OTP',
+        message: error.response?.data?.message || 'Failed to verify email',
+        status: error.response?.status
+      });
+      throw error;
+    }
+  };
+
+  const resendVerification = async (email) => {
+    try {
+      setError('');
+      setApiError(null);
+      
+      console.log('Resending verification to:', email);
+      const response = await axios.post('/api/auth/resend-verification', { email });
+      console.log('Resend verification response:', response.data);
+      
+      if (response.data.verificationToken) {
+        setVerificationToken(response.data.verificationToken);
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error resending verification:', error);
+      setError(error.response?.data?.message || 'Failed to resend verification');
+      setApiError({
+        message: error.response?.data?.message || 'Failed to resend verification',
+        status: error.response?.status
+      });
+      throw error;
+    }
+  };
+
+  const login = async (email, password) => {
+    try {
+      setError('');
+      setApiError(null);
+      
+      console.log('Logging in:', { email });
+      const response = await axios.post('/api/auth/login', { email, password });
+      console.log('Login response:', response.data);
+      
+      setUser(response.data);
+      setVerificationStep('login');
+      return response.data;
+    } catch (error) {
+      console.error('Error logging in:', error);
+      setError(error.response?.data?.message || 'Invalid credentials');
+      setApiError({
+        message: error.response?.data?.message || 'Failed to login',
         status: error.response?.status
       });
       throw error;
@@ -83,8 +134,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const resetVerification = () => {
-    setPhoneVerificationStep('phone');
-    setPhone('');
+    setVerificationStep('register');
+    setVerificationToken(null);
     setError('');
     setApiError(null);
   };
@@ -124,11 +175,13 @@ export const AuthProvider = ({ children }) => {
       value={{ 
         user, 
         loading, 
-        sendOTP, 
-        verifyOTP, 
-        phoneVerificationStep,
+        register,
+        verifyEmail,
+        resendVerification,
+        login,
+        verificationStep,
+        verificationToken,
         resetVerification,
-        phone,
         error,
         apiError,
         logout, 
