@@ -15,6 +15,7 @@ const Login = () => {
     verificationCode: ''
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -43,9 +44,7 @@ const Login = () => {
           break;
 
         case 'login':
-          await login(formData.email, formData.password);
-          toast.success('Login successful!');
-          navigate('/');
+          await handleLogin(e);
           break;
 
         default:
@@ -65,6 +64,39 @@ const Login = () => {
       toast.success('Verification code resent! Please check your email.');
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to resend verification code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      const result = await login(formData.email, formData.password);
+      
+      if (result.success) {
+        toast.success('Login successful!');
+        navigate('/dashboard');
+      } else {
+        if (result.email) {
+          // User needs to verify email
+          setStep('verify');
+          setFormData(prev => ({
+            ...prev,
+            verificationEmail: result.email
+          }));
+        } else {
+          setError(result.error);
+          toast.error(result.error);
+        }
+      }
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || 'An unexpected error occurred. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

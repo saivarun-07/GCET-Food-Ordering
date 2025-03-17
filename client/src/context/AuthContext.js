@@ -10,13 +10,13 @@ export const AuthProvider = ({ children }) => {
 
   // Create axios instance with default config
   const api = axios.create({
-    baseURL: process.env.REACT_APP_API_URL || 'https://gcet-food-ordering-backend.onrender.com',
+    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
     headers: {
       'Content-Type': 'application/json'
     }
   });
 
-  // Add request interceptor to add token to headers
+  // Add request interceptor to include JWT token
   api.interceptors.request.use(
     (config) => {
       const token = localStorage.getItem('token');
@@ -34,6 +34,7 @@ export const AuthProvider = ({ children }) => {
   api.interceptors.response.use(
     (response) => response,
     (error) => {
+      console.error('Response interceptor error:', error);
       if (error.response?.status === 401) {
         localStorage.removeItem('token');
         setUser(null);
@@ -118,15 +119,30 @@ export const AuthProvider = ({ children }) => {
   // Login
   const login = async (email, password) => {
     try {
+      setLoading(true);
       const response = await api.post('/api/auth/login', { email, password });
-      const { token, user } = response.data;
-      localStorage.setItem('token', token);
-      setUser(user);
-      setError(null);
-      return response.data;
+      
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        setUser(response.data.user);
+        setError(null);
+        return { success: true };
+      }
     } catch (error) {
-      console.error('Error logging in:', error.response?.data || error.message);
-      throw error;
+      console.error('Login error:', error);
+      if (error.response?.data?.message === 'Please verify your email first') {
+        return { 
+          success: false, 
+          error: 'Please verify your email before logging in',
+          email: error.response.data.email
+        };
+      }
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Login failed. Please try again.' 
+      };
+    } finally {
+      setLoading(false);
     }
   };
 

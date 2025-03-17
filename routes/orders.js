@@ -2,27 +2,59 @@ const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
 const Menu = require('../models/Menu');
+const jwt = require('jsonwebtoken');
+
+// JWT Secret (should match the one in auth.js)
+const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-key';
 
 // Middleware to check if user is authenticated
 const isAuthenticated = (req, res, next) => {
+  // First check session
   if (req.session && req.session.user) {
     return next();
   }
+  
+  // If no session, check for JWT token
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.user = decoded; // Set user from token
+      return next();
+    } catch (error) {
+      console.error('JWT verification error:', error.message);
+    }
+  }
+  
   res.status(401).json({ message: 'Not authenticated' });
 };
 
 // Middleware to check if user is admin
 const isAdmin = (req, res, next) => {
-  if (req.session && req.session.user && req.session.user.role === 'admin') {
+  // Get user from either session or JWT token verification
+  const user = req.session?.user || req.user;
+  
+  if (user && user.role === 'admin') {
     return next();
   }
   res.status(403).json({ message: 'Not authorized' });
+};
+
+// Get user ID helper function
+const getUserId = (req) => {
+  return (req.session?.user?._id || req.user?._id)?.toString();
 };
 
 // Create new order
 router.post('/', isAuthenticated, async (req, res) => {
   try {
     const { items, deliveryLocation } = req.body;
+    const userId = getUserId(req);
+    
+    if (!userId) {
+      return res.status(401).json({ message: 'User ID not found in session or token' });
+    }
     
     // Calculate total amount
     let totalAmount = 0;
@@ -35,7 +67,7 @@ router.post('/', isAuthenticated, async (req, res) => {
     }
 
     const order = new Order({
-      user: req.session.user._id,
+      user: userId,
       items,
       totalAmount,
       deliveryLocation
@@ -44,6 +76,7 @@ router.post('/', isAuthenticated, async (req, res) => {
     await order.save();
     res.status(201).json(order);
   } catch (error) {
+    console.error('Error creating order:', error);
     res.status(500).json({ message: 'Error creating order', error: error.message });
   }
 });
@@ -51,23 +84,31 @@ router.post('/', isAuthenticated, async (req, res) => {
 // Get user's orders
 router.get('/my-orders', isAuthenticated, async (req, res) => {
   try {
-    const orders = await Order.find({ user: req.session.user._id })
+    const userId = getUserId(req);
+    
+    if (!userId) {
+      return res.status(401).json({ message: 'User ID not found in session or token' });
+    }
+    
+    const orders = await Order.find({ user: userId })
       .populate('user', 'name email')
       .sort({ createdAt: -1 });
     res.json(orders);
   } catch (error) {
+    console.error('Error fetching user orders:', error);
     res.status(500).json({ message: 'Error fetching orders', error: error.message });
   }
 });
 
 // Get all orders (admin only)
-router.get('/all', isAuthenticated, isAdmin, async (req, res) => {
+router.get('/', isAuthenticated, isAdmin, async (req, res) => {
   try {
     const orders = await Order.find()
       .populate('user', 'name email')
       .sort({ createdAt: -1 });
     res.json(orders);
   } catch (error) {
+    console.error('Error fetching all orders:', error);
     res.status(500).json({ message: 'Error fetching orders', error: error.message });
   }
 });
@@ -88,6 +129,7 @@ router.put('/:orderId/status', isAuthenticated, isAdmin, async (req, res) => {
     
     res.json(order);
   } catch (error) {
+    console.error('Error updating order status:', error);
     res.status(500).json({ message: 'Error updating order status', error: error.message });
   }
 });
@@ -96,13 +138,15 @@ router.put('/:orderId/status', isAuthenticated, isAdmin, async (req, res) => {
 router.put('/:orderId/cancel', isAuthenticated, async (req, res) => {
   try {
     const order = await Order.findById(req.params.orderId);
+    const userId = getUserId(req);
+    const userRole = req.session?.user?.role || req.user?.role;
     
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
     // Check if user owns the order or is admin
-    if (order.user.toString() !== req.session.user._id.toString() && req.session.user.role !== 'admin') {
+    if (order.user.toString() !== userId && userRole !== 'admin') {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
@@ -116,6 +160,7 @@ router.put('/:orderId/cancel', isAuthenticated, async (req, res) => {
     
     res.json(order);
   } catch (error) {
+    console.error('Error cancelling order:', error);
     res.status(500).json({ message: 'Error cancelling order', error: error.message });
   }
 });

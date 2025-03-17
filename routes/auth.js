@@ -585,16 +585,26 @@ router.post('/resend-verification', async (req, res) => {
   }
 });
 
-// Login
+// Login with email/password or phone/OTP
 router.post('/login', loginLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, phone, otp, authMethod = 'email' } = req.body;
 
-    if (!email || !password) {
+    // Validate required fields based on auth method
+    if (authMethod === 'email' && (!email || !password)) {
       return res.status(400).json({ message: 'Email and password are required' });
     }
+    if (authMethod === 'phone' && (!phone || !otp)) {
+      return res.status(400).json({ message: 'Phone number and OTP are required' });
+    }
 
-    const user = await User.findOne({ email });
+    // Find user based on auth method
+    let user;
+    if (authMethod === 'email') {
+      user = await User.findOne({ email });
+    } else if (authMethod === 'phone') {
+      user = await User.findOne({ phone });
+    }
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
@@ -607,25 +617,37 @@ router.post('/login', loginLimiter, async (req, res) => {
       });
     }
 
-    // Verify password
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
+    // Verify credentials based on auth method
+    let isValid = false;
+    if (authMethod === 'email') {
+      if (!user.isEmailVerified) {
+        return res.status(401).json({
+          message: 'Please verify your email first',
+          email: user.email
+        });
+      }
+      isValid = await user.comparePassword(password);
+    } else if (authMethod === 'phone') {
+      if (!user.isPhoneVerified) {
+        return res.status(401).json({
+          message: 'Please verify your phone number first'
+        });
+      }
+      // Check if OTP matches and is not expired
+      const now = new Date();
+      isValid = user.otpData && 
+                user.otpData.otp === otp && 
+                now <= new Date(user.otpData.expiresAt);
+    }
+
+    if (!isValid) {
       await user.incrementLoginAttempts();
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     // Reset login attempts on successful login
     await user.resetLoginAttempts();
-
-    // Check if email is verified
-    if (!user.isEmailVerified) {
-      return res.status(401).json({ 
-        message: 'Please verify your email before logging in' 
-      });
-    }
-
-    // Update last login
-    user.lastLogin = Date.now();
+    user.lastLogin = new Date();
     await user.save();
 
     // Generate JWT token
@@ -642,7 +664,13 @@ router.post('/login', loginLimiter, async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        phone: user.phone,
+        role: user.role,
+        isEmailVerified: user.isEmailVerified,
+        isPhoneVerified: user.isPhoneVerified,
+        block: user.block,
+        classNumber: user.classNumber,
+        profileCompleted: user.profileCompleted
       }
     });
 

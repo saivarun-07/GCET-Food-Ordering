@@ -38,17 +38,22 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // CORS configuration
-const allowedOrigins = [
-  'https://gcet-food-ordering-frontend.onrender.com',
-  'https://gcet-food-ordering-frontend-oo9e.onrender.com',
-  'http://localhost:3000',
-  'null'
-];
-
 app.use(cors({
   origin: function(origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
+    
+    // In development, allow all origins
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    
+    // In production, check against allowed origins
+    const allowedOrigins = [
+      'https://gcet-food-ordering-frontend.onrender.com',
+      'https://gcet-food-ordering-frontend-oo9e.onrender.com',
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
     
     if (allowedOrigins.indexOf(origin) === -1) {
       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
