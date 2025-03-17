@@ -3,6 +3,25 @@ import axios from 'axios';
 
 const AuthContext = createContext(null);
 
+// Create axios instance with default config
+const api = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'https://gcet-food-ordering-backend.onrender.com'
+});
+
+// Add request interceptor to add auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,7 +36,7 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
-      const response = await axios.get('/api/auth/current-user');
+      const response = await api.get('/api/auth/current-user');
       setUser(response.data);
       setApiError(null);
     } catch (error) {
@@ -42,7 +61,7 @@ export const AuthProvider = ({ children }) => {
       setApiError(null);
       
       console.log('Registering user:', userData);
-      const response = await axios.post('/api/auth/register', userData);
+      const response = await api.post('/api/auth/register', userData);
       console.log('Registration response:', response.data);
       
       if (response.data.verificationToken) {
@@ -68,10 +87,15 @@ export const AuthProvider = ({ children }) => {
       setApiError(null);
       
       console.log('Verifying email:', { email, token });
-      const response = await axios.post('/api/auth/verify-email', { email, token });
+      const response = await api.post('/api/auth/verify-email', { email, token });
       console.log('Email verification response:', response.data);
       
-      setUser(response.data);
+      // Store the token
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+      }
+      
+      setUser(response.data.user);
       setVerificationStep('login');
       return response.data;
     } catch (error) {
@@ -91,7 +115,7 @@ export const AuthProvider = ({ children }) => {
       setApiError(null);
       
       console.log('Resending verification to:', email);
-      const response = await axios.post('/api/auth/resend-verification', { email });
+      const response = await api.post('/api/auth/resend-verification', { email });
       console.log('Resend verification response:', response.data);
       
       if (response.data.verificationToken) {
@@ -116,10 +140,15 @@ export const AuthProvider = ({ children }) => {
       setApiError(null);
       
       console.log('Logging in:', { email });
-      const response = await axios.post('/api/auth/login', { email, password });
+      const response = await api.post('/api/auth/login', { email, password });
       console.log('Login response:', response.data);
       
-      setUser(response.data);
+      // Store the token
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+      }
+      
+      setUser(response.data.user);
       setVerificationStep('login');
       return response.data;
     } catch (error) {
@@ -142,7 +171,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await axios.get('/api/auth/logout');
+      await api.get('/api/auth/logout');
+      localStorage.removeItem('token');
       setUser(null);
       setApiError(null);
     } catch (error) {
@@ -157,7 +187,7 @@ export const AuthProvider = ({ children }) => {
   const updateProfile = async (profileData) => {
     try {
       setApiError(null);
-      const response = await axios.put('/api/auth/profile', profileData);
+      const response = await api.put('/api/auth/profile', profileData);
       setUser(response.data);
       return response.data;
     } catch (error) {

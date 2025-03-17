@@ -10,6 +10,26 @@ const { generateVerificationToken, sendVerificationEmail } = require('../utils/e
 const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-key';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1d';
 
+// Middleware to verify JWT token
+const verifyToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'No token provided' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    console.error('Token verification error:', error);
+    return res.status(401).json({ message: 'Invalid token' });
+  }
+};
+
 // Generate a unique random email for testing purposes
 const generateUniqueEmail = (phone) => {
   const timestamp = Date.now();
@@ -252,45 +272,16 @@ router.post('/verify-otp', async (req, res) => {
 });
 
 // Get current user
-router.get('/current-user', async (req, res) => {
-  console.log('Current user request received');
-  console.log('Session ID:', req.session.id);
-  console.log('Cookies:', req.headers.cookie);
-  
+router.get('/current-user', verifyToken, async (req, res) => {
   try {
-    // First try to get user from session
-    if (req.session.user) {
-      console.log('User found in session:', req.session.user._id);
-      return res.json(req.session.user);
+    const user = await User.findById(req.user.userId).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
     }
-
-    // If no user in session, try to get from token in Authorization header
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      console.log('Got token from Authorization header');
-      
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        console.log('JWT token verified for user:', decoded._id);
-        
-        // Set user in session for future requests
-        req.session.user = decoded;
-        await new Promise((resolve) => {
-          req.session.save(() => resolve());
-        });
-        
-        return res.json(decoded);
-      } catch (jwtError) {
-        console.error('Invalid JWT token:', jwtError.message);
-      }
-    }
-    
-    console.log('No user in session or valid token');
-    res.status(401).json({ message: 'Not authenticated' });
+    res.json(user);
   } catch (error) {
-    console.error('Error in current-user endpoint:', error);
-    res.status(500).json({ message: 'Error checking authentication', error: error.message });
+    console.error('Error fetching current user:', error);
+    res.status(500).json({ message: 'Error fetching user', error: error.message });
   }
 });
 
@@ -304,138 +295,31 @@ router.get('/logout', (req, res) => {
   });
 });
 
-// Update user profile (block and class number)
-router.put('/profile', async (req, res) => {
+// Update user profile
+router.put('/profile', verifyToken, async (req, res) => {
   try {
-    console.log('Profile update request received');
-    console.log('Headers:', JSON.stringify(req.headers));
-    console.log('Session ID:', req.session?.id);
-    console.log('User in session:', !!req.session?.user);
-    
-    // Get user from session or token
-    let userId = null;
-    let userData = null;
-    
-    // Debug auth header
-    const authHeader = req.headers.authorization;
-    console.log('Authorization header:', authHeader ? 'Present' : 'Missing');
-    
-    if (req.session && req.session.user) {
-      console.log('Using user from session:', req.session.user._id);
-      userId = req.session.user._id;
-      userData = req.session.user;
-    } else if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      console.log('Extracted token from Authorization header');
-      
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        console.log('JWT token verified successfully for user:', decoded._id);
-        userId = decoded._id;
-        userData = decoded;
-      } catch (jwtError) {
-        console.error('JWT verification failed:', jwtError.message);
-      }
-    } else {
-      // FALLBACK: Get token from body if client hasn't implemented header yet
-      const { token } = req.body;
-      if (token) {
-        console.log('Using token from request body as fallback');
-        try {
-          const decoded = jwt.verify(token, JWT_SECRET);
-          console.log('Body token verified successfully for user:', decoded._id);
-          userId = decoded._id;
-          userData = decoded;
-        } catch (jwtError) {
-          console.error('Body token verification failed:', jwtError.message);
-        }
-      }
-    }
-    
-    if (!userId) {
-      console.log('Not authenticated - no valid user identification');
-      return res.status(401).json({ 
-        message: 'Not authenticated',
-        help: 'You need to login first and include the token in your request' 
-      });
-    }
-
-    const { block, classNumber } = req.body;
-    console.log('Updating profile for user:', userId, 'with block:', block, 'class:', classNumber);
-    
-    // Validate inputs
-    if (!block || !classNumber) {
-      return res.status(400).json({ 
-        message: 'Block and class number are required' 
-      });
-    }
-    
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { 
-        block, 
-        classNumber,
-        profileCompleted: true 
-      },
-      { new: true }
-    );
+    const { name, phone } = req.body;
+    const user = await User.findById(req.user.userId);
 
     if (!user) {
-      console.log('User not found in database:', userId);
       return res.status(404).json({ message: 'User not found' });
     }
 
-    console.log('User profile updated in database:', user._id);
+    if (name) user.name = name;
+    if (phone) user.phone = phone;
 
-    // Create updated user data
-    const updatedUserData = {
-      _id: user._id,
-      phone: user.phone,
-      name: user.name,
-      role: user.role,
-      block: user.block,
-      classNumber: user.classNumber,
-      profileCompleted: user.profileCompleted
-    };
+    await user.save();
 
-    // Create a new JWT token with updated info
-    const newToken = jwt.sign(updatedUserData, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-    console.log('Generated new JWT token with updated profile data');
-
-    // Update session with new user data if session exists
-    if (req.session) {
-      req.session.user = updatedUserData;
-      
-      // Save session explicitly
-      try {
-        await new Promise((resolve, reject) => {
-          req.session.save((err) => {
-            if (err) {
-              console.error('Session save error:', err);
-              reject(err);
-            } else {
-              console.log('Session saved successfully after profile update');
-              resolve();
-            }
-          });
-        });
-      } catch (sessionError) {
-        console.error('Error saving session, but continuing with JWT token:', sessionError);
-      }
-    }
-
-    console.log('Sending updated user data to client');
     res.json({
-      ...updatedUserData,
-      token: newToken
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role
     });
   } catch (error) {
-    console.error('Error updating profile:', error);
-    res.status(500).json({ 
-      message: 'Error updating profile', 
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
+    console.error('Profile update error:', error);
+    res.status(500).json({ message: 'Error updating profile', error: error.message });
   }
 });
 
