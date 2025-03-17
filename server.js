@@ -2,12 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const session = require('express-session');
-const MongoStore = require('connect-mongo');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
-const path = require('path');
 
 const app = express();
 
@@ -64,25 +61,6 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Session configuration
-const sessionConfig = {
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
-  resave: false,
-  saveUninitialized: false,
-  store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI,
-    ttl: 24 * 60 * 60 // 1 day
-  }),
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    maxAge: 24 * 60 * 60 * 1000 // 1 day
-  }
-};
-
-app.use(session(sessionConfig));
-
 // MongoDB connection
 const connectDB = async () => {
   try {
@@ -91,12 +69,6 @@ const connectDB = async () => {
     
     const conn = await mongoose.connect(process.env.MONGODB_URI);
     console.log('MongoDB Connected');
-    
-    // Log session configuration
-    console.log('Session config:', {
-      secret: '****',
-      cookie: sessionConfig.cookie
-    });
   } catch (error) {
     console.error('MongoDB connection error:', error);
     process.exit(1);
