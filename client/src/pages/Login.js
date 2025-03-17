@@ -25,6 +25,18 @@ const Login = () => {
     }));
   };
 
+  const handleResendVerification = async () => {
+    try {
+      setLoading(true);
+      await resendVerification(formData.email);
+      toast.success('Verification code resent successfully!');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to resend verification code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -60,7 +72,7 @@ const Login = () => {
           const loginResult = await login(formData.email, formData.password);
           if (loginResult.success) {
             toast.success('Login successful!');
-            navigate('/dashboard');
+            navigate('/');
           } else {
             if (loginResult.email) {
               setStep('verify');
@@ -73,51 +85,6 @@ const Login = () => {
             }
           }
           break;
-      }
-    } catch (err) {
-      const errorMessage = err.response?.data?.message || 'An unexpected error occurred. Please try again.';
-      setError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendVerification = async () => {
-    try {
-      setLoading(true);
-      await resendVerification(formData.email);
-      toast.success('Verification code resent! Please check your email.');
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to resend verification code');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-
-    try {
-      const result = await login(formData.email, formData.password);
-      
-      if (result.success) {
-        toast.success('Login successful!');
-        navigate('/dashboard');
-      } else {
-        if (result.email) {
-          // User needs to verify email
-          setStep('verify');
-          setFormData(prev => ({
-            ...prev,
-            verificationEmail: result.email
-          }));
-        } else {
-          setError(result.error);
-          toast.error(result.error);
-        }
       }
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'An unexpected error occurred. Please try again.';
@@ -248,6 +215,14 @@ const Login = () => {
                 value={formData.verificationCode}
                 onChange={handleChange}
               />
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                className="mt-2 text-sm text-indigo-600 hover:text-indigo-500"
+                disabled={loading}
+              >
+                Resend verification code
+              </button>
             </div>
           )}
 
