@@ -1,160 +1,136 @@
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
+const helmet = require('helmet');
+const compression = require('compression');
+const morgan = require('morgan');
 const path = require('path');
-const createSessionStore = require('./config/session');
-require('dotenv').config();
 
 const app = express();
 
-// Debug environment variables
-console.log('Environment:', process.env.NODE_ENV);
-console.log('MongoDB URI exists:', !!process.env.MONGODB_URI);
-if (process.env.MONGODB_URI) {
-  // Log the first part of the URI (without credentials) for debugging
-  const uriParts = process.env.MONGODB_URI.split('@');
-  console.log('MongoDB URI format:', uriParts[0].split('://')[0] + '://****@' + uriParts[1]);
-}
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", process.env.FRONTEND_URL, "https://gcet-food-ordering-frontend.onrender.com"],
+      fontSrc: ["'self'", "https:", "data:"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      sandbox: ['allow-forms', 'allow-scripts', 'allow-same-origin']
+    }
+  },
+  crossOriginEmbedderPolicy: false
+}));
 
-// Configure CORS - Setup CORS early before other middleware
-const corsOptions = {
-  origin: [
-    'https://gcet-food-ordering-frontend.onrender.com',
-    'https://gcet-food-ordering-frontend-oo9e.onrender.com',
-    'http://localhost:3000',
-    'null'  // Allow requests from files opened directly in browser
-  ],
+// Compression middleware
+app.use(compression());
+
+// Logging middleware
+app.use(morgan('combined'));
+
+// Body parser middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// CORS configuration
+const allowedOrigins = [
+  'https://gcet-food-ordering-frontend.onrender.com',
+  'https://gcet-food-ordering-frontend-oo9e.onrender.com',
+  'http://localhost:3000',
+  'null'
+];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Cookie'],
-  exposedHeaders: ['Content-Length', 'X-Confirm-Delete', 'Set-Cookie'],
-  maxAge: 86400, // preflight results cache for 24 hours
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Session configuration
+const sessionConfig = {
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI,
+    ttl: 24 * 60 * 60 // 1 day
+  }),
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 24 * 60 * 60 * 1000 // 1 day
+  }
 };
 
-// Enable pre-flight requests for all routes
-app.options('*', cors(corsOptions));
-
-// Apply CORS middleware
-app.use(cors(corsOptions));
-
-// Log CORS settings
-console.log('CORS origins:', corsOptions.origin);
-
-// Add Content Security Policy headers
-app.use((req, res, next) => {
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://gcet-food-ordering-backend.onrender.com https://gcet-food-ordering-frontend-oo9e.onrender.com"
-  );
-  next();
-});
-
-// Other Middleware
-app.use(express.json());
+app.use(session(sessionConfig));
 
 // MongoDB connection
-const mongoUri = process.env.MONGODB_URI;
-if (!mongoUri) {
-  console.error('MONGODB_URI is not defined in environment variables');
-  process.exit(1);
-}
-
-// MongoDB connection options
-const mongooseOptions = {
-  serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 45000,
-};
-
-// Connect to MongoDB first
-mongoose.connect(mongoUri, mongooseOptions)
-  .then(async () => {
+const connectDB = async () => {
+  try {
+    console.log('MongoDB URI exists:', !!process.env.MONGODB_URI);
+    console.log('MongoDB URI format:', process.env.MONGODB_URI?.replace(/\/\/[^:]+:[^@]+@/, '//****:****@'));
+    
+    const conn = await mongoose.connect(process.env.MONGODB_URI);
     console.log('MongoDB Connected');
     
-    // Session configuration
-    const sessionConfig = {
-      secret: process.env.SESSION_SECRET || 'your-secret-key',
-      resave: false,
-      saveUninitialized: false,
-      store: await createSessionStore(),
-      cookie: {
-        secure: process.env.NODE_ENV === 'production', // Must be true in production for HTTPS
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000, // 1 day
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',  // 'none' is required for cross-site cookies
-      }
-    };
-
-    // Force secure cookies in production, even if not set by express-session
-    if (process.env.NODE_ENV === 'production') {
-      app.set('trust proxy', 1); // Trust first proxy
-    }
-
-    app.use(session(sessionConfig));
-
-    // Log session config for debugging
+    // Log session configuration
     console.log('Session config:', {
-      secret: sessionConfig.secret ? '****' : undefined,
-      cookie: {
-        secure: sessionConfig.cookie.secure,
-        httpOnly: sessionConfig.cookie.httpOnly,
-        sameSite: sessionConfig.cookie.sameSite,
-        domain: sessionConfig.cookie.domain,
-        maxAge: sessionConfig.cookie.maxAge
-      }
+      secret: '****',
+      cookie: sessionConfig.cookie
     });
-
-    // Authentication Middleware
-    app.use((req, res, next) => {
-      // Make user available in templates
-      res.locals.user = req.session.user || null;
-      next();
-    });
-
-    // Root path handler
-    app.get('/', (req, res) => {
-      res.status(200).json({ 
-        message: 'GCET Food Ordering API Server', 
-        status: 'online',
-        endpoints: {
-          auth: '/api/auth',
-          orders: '/api/orders',
-          menu: '/api/menu',
-          health: '/api/health'
-        },
-        frontend: process.env.CLIENT_URL
-      });
-    });
-
-    // Routes
-    app.use('/api/auth', require('./routes/auth'));
-    app.use('/api/orders', require('./routes/orders'));
-    app.use('/api/menu', require('./routes/menu'));
-
-    // API Health check endpoint
-    app.get('/api/health', (req, res) => {
-      res.status(200).json({ status: 'ok', message: 'API is running' });
-    });
-
-    // Error handling middleware
-    app.use((err, req, res, next) => {
-      console.error(err.stack);
-      res.status(500).json({ 
-        message: 'Something went wrong!',
-        error: process.env.NODE_ENV === 'development' ? err.message : undefined
-      });
-    });
-
-    // Start server
-    const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => {
-      console.log(`API server running on port ${PORT}`);
-    });
-  })
-  .catch(err => {
-    console.error('MongoDB connection error:', err);
-    console.error('Connection string format:', mongoUri.startsWith('mongodb+srv://') ? 'Valid' : 'Invalid');
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
     process.exit(1);
-  }); 
+  }
+};
+
+connectDB();
+
+// Routes
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/menu', require('./routes/menu'));
+app.use('/api/orders', require('./routes/orders'));
+
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, 'client/build')));
+  
+  app.get('*', (req, res) => {
+    res.sendFile(path.resolve(__dirname, 'client', 'build', 'index.html'));
+  });
+}
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ 
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+  });
+});
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+}); 
