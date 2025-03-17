@@ -105,26 +105,61 @@ const connectDB = async () => {
 
 connectDB();
 
-// Routes
+// API Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/menu', require('./routes/menu'));
 app.use('/api/orders', require('./routes/orders'));
 
-// Serve static files in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'client/build')));
-  
-  app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'client', 'build', 'index.html'));
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'API is running' });
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'GCET Food Ordering API Server',
+    status: 'online',
+    endpoints: {
+      auth: '/api/auth',
+      orders: '/api/orders',
+      menu: '/api/menu',
+      health: '/api/health'
+    }
   });
-}
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    message: 'Not Found',
+    error: 'The requested resource was not found on this server'
+  });
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Error:', err.stack);
+  
+  // Handle specific error types
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({
+      message: 'Validation Error',
+      error: err.message
+    });
+  }
+  
+  if (err.name === 'UnauthorizedError') {
+    return res.status(401).json({
+      message: 'Unauthorized',
+      error: 'Invalid or missing authentication token'
+    });
+  }
+  
+  // Default error response
   res.status(500).json({ 
-    message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    message: 'Internal Server Error',
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong!'
   });
 });
 
