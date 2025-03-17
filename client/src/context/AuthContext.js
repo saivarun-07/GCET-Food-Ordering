@@ -12,8 +12,10 @@ export const AuthProvider = ({ children }) => {
   const api = axios.create({
     baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
     headers: {
-      'Content-Type': 'application/json'
-    }
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest'
+    },
+    withCredentials: true
   });
 
   // Add request interceptor to include JWT token
@@ -30,14 +32,15 @@ export const AuthProvider = ({ children }) => {
     }
   );
 
-  // Add response interceptor to handle token expiration
+  // Add response interceptor to handle errors
   api.interceptors.response.use(
     (response) => response,
     (error) => {
       console.error('Response interceptor error:', error);
       if (error.response?.status === 401) {
+        // Handle unauthorized access
         localStorage.removeItem('token');
-        setUser(null);
+        window.location.href = '/login';
       }
       return Promise.reject(error);
     }
