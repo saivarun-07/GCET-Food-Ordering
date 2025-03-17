@@ -45,7 +45,12 @@ const Login = () => {
     try {
       switch (step) {
         case 'register':
-          const result = await register(formData.name, formData.email, formData.phone, formData.password);
+          const result = await register({
+            name: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            password: formData.password
+          });
           if (result.success) {
             setStep('verify');
             setFormData(prev => ({

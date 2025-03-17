@@ -466,13 +466,17 @@ router.post('/register', registerLimiter, async (req, res) => {
     // In development, return the verification token
     if (process.env.NODE_ENV === 'development') {
       return res.status(201).json({
+        success: true,
         message: 'User registered successfully. Please verify your email.',
+        email: email,
         verificationToken: token // Only in development
       });
     }
 
     res.status(201).json({
-      message: 'User registered successfully. Please verify your email.'
+      success: true,
+      message: 'User registered successfully. Please verify your email.',
+      email: email
     });
 
   } catch (error) {
@@ -529,6 +533,7 @@ router.post('/verify-email', async (req, res) => {
     );
 
     res.json({
+      success: true,
       message: 'Email verified successfully',
       token,
       user: {
@@ -575,6 +580,7 @@ router.post('/resend-verification', async (req, res) => {
     const emailSent = await sendVerificationEmail(email, verificationToken);
 
     res.json({
+      success: true,
       message: 'Verification email sent successfully',
       emailSent,
       verificationToken: emailSent ? undefined : verificationToken
@@ -658,6 +664,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     );
 
     res.json({
+      success: true,
       message: 'Login successful',
       token,
       user: {
