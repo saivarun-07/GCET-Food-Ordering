@@ -27,31 +27,57 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
 
     try {
       switch (step) {
         case 'register':
-          await register(formData);
-          toast.success('Registration successful! Please check your email for verification code.');
-          setStep('verify');
+          const result = await register(formData.name, formData.email, formData.phone, formData.password);
+          if (result.success) {
+            setStep('verify');
+            setFormData(prev => ({
+              ...prev,
+              verificationEmail: result.email
+            }));
+          } else {
+            setError(result.error);
+          }
           break;
 
         case 'verify':
-          await verifyEmail(formData.email, formData.verificationCode);
-          toast.success('Email verified successfully! Please login.');
-          setStep('login');
+          const verifyResult = await verifyEmail(formData.email, formData.verificationCode);
+          if (verifyResult.success) {
+            setStep('login');
+            setFormData({ email: formData.email, password: '' });
+            toast.success('Email verified successfully! Please sign in.');
+          } else {
+            setError(verifyResult.error);
+          }
           break;
 
         case 'login':
-          await handleLogin(e);
-          break;
-
-        default:
+          const loginResult = await login(formData.email, formData.password);
+          if (loginResult.success) {
+            toast.success('Login successful!');
+            navigate('/dashboard');
+          } else {
+            if (loginResult.email) {
+              setStep('verify');
+              setFormData(prev => ({
+                ...prev,
+                verificationEmail: loginResult.email
+              }));
+            } else {
+              setError(loginResult.error);
+            }
+          }
           break;
       }
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'An error occurred');
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || 'An unexpected error occurred. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -107,139 +133,141 @@ const Login = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            {step === 'register' && 'Create your account'}
-            {step === 'verify' && 'Verify your email'}
-            {step === 'login' && 'Sign in to your account'}
+            {step === 'register' ? 'Create your account' : 
+             step === 'verify' ? 'Verify your email' : 
+             'Sign in to your account'}
           </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            {step === 'register' ? 'Already have an account?' : 
+             step === 'verify' ? 'Need to resend the code?' : 
+             "Don't have an account?"}{' '}
+            <button
+              onClick={() => {
+                if (step === 'register') {
+                  setStep('login');
+                  setFormData({ email: '', password: '' });
+                } else if (step === 'login') {
+                  setStep('register');
+                  setFormData({ name: '', email: '', phone: '', password: '' });
+                }
+              }}
+              className="font-medium text-indigo-600 hover:text-indigo-500"
+            >
+              {step === 'register' ? 'Sign in' : 
+               step === 'verify' ? 'Resend code' : 
+               'Create account'}
+            </button>
+          </p>
         </div>
+
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-400 p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
             {step === 'register' && (
-              <>
-                <div>
-                  <label htmlFor="name" className="sr-only">Name</label>
-                  <input
-                    id="name"
-                    name="name"
-                    type="text"
-                    required
-                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                    placeholder="Full Name"
-                    value={formData.name}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="email" className="sr-only">Email address</label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                    placeholder="Email address"
-                    value={formData.email}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="phone" className="sr-only">Phone number</label>
-                  <input
-                    id="phone"
-                    name="phone"
-                    type="tel"
-                    required
-                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                    placeholder="Phone number"
-                    value={formData.phone}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="password" className="sr-only">Password</label>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    required
-                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                    placeholder="Password"
-                    value={formData.password}
-                    onChange={handleChange}
-                  />
-                </div>
-              </>
-            )}
-
-            {step === 'verify' && (
               <div>
-                <label htmlFor="verificationCode" className="sr-only">Verification Code</label>
+                <label htmlFor="name" className="sr-only">Full Name</label>
                 <input
-                  id="verificationCode"
-                  name="verificationCode"
+                  id="name"
+                  name="name"
                   type="text"
                   required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  placeholder="Enter verification code"
-                  value={formData.verificationCode}
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  placeholder="Full Name"
+                  value={formData.name}
                   onChange={handleChange}
                 />
-                <button
-                  type="button"
-                  onClick={handleResendVerification}
-                  className="mt-2 text-sm text-indigo-600 hover:text-indigo-500"
-                  disabled={loading}
-                >
-                  Resend verification code
-                </button>
               </div>
             )}
-
-            {step === 'login' && (
-              <>
-                <div>
-                  <label htmlFor="email" className="sr-only">Email address</label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                    placeholder="Email address"
-                    value={formData.email}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="password" className="sr-only">Password</label>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    required
-                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                    placeholder="Password"
-                    value={formData.password}
-                    onChange={handleChange}
-                  />
-                </div>
-              </>
+            <div>
+              <label htmlFor="email" className="sr-only">Email address</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Email address"
+                value={formData.email}
+                onChange={handleChange}
+              />
+            </div>
+            {step === 'register' && (
+              <div>
+                <label htmlFor="phone" className="sr-only">Phone Number</label>
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  required
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  placeholder="Phone Number"
+                  value={formData.phone}
+                  onChange={handleChange}
+                />
+              </div>
             )}
+            <div>
+              <label htmlFor="password" className="sr-only">Password</label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Password"
+                value={formData.password}
+                onChange={handleChange}
+              />
+            </div>
           </div>
+
+          {step === 'verify' && (
+            <div>
+              <label htmlFor="verificationCode" className="sr-only">Verification Code</label>
+              <input
+                id="verificationCode"
+                name="verificationCode"
+                type="text"
+                required
+                className="appearance-none rounded relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Enter verification code"
+                value={formData.verificationCode}
+                onChange={handleChange}
+              />
+            </div>
+          )}
 
           <div>
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
-              {loading ? 'Processing...' : (
-                <>
-                  {step === 'register' && 'Register'}
-                  {step === 'verify' && 'Verify Email'}
-                  {step === 'login' && 'Sign in'}
-                </>
-              )}
+              {loading ? (
+                <span className="absolute left-0 inset-y-0 flex items-center pl-3">
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </span>
+              ) : null}
+              {step === 'register' ? 'Register' : 
+               step === 'verify' ? 'Verify Email' : 
+               'Sign In'}
             </button>
           </div>
         </form>
