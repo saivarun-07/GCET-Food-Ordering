@@ -50,6 +50,7 @@ app.use(cors({
     
     // In production, check against allowed origins
     const allowedOrigins = [
+      'https://canteen-frontend-dqqv.onrender.com',
       'https://gcet-food-ordering-frontend.onrender.com',
       'https://gcet-food-ordering-frontend-oo9e.onrender.com',
       process.env.FRONTEND_URL
