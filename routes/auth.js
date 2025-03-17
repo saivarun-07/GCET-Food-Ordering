@@ -290,13 +290,32 @@ router.post('/verify-otp', async (req, res) => {
 router.get('/current-user', verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select('-password');
+    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    res.json(user);
+
+    res.json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isEmailVerified: user.isEmailVerified,
+        isPhoneVerified: user.isPhoneVerified,
+        block: user.block,
+        classNumber: user.classNumber,
+        profileCompleted: user.profileCompleted
+      }
+    });
+
   } catch (error) {
-    console.error('Error fetching current user:', error);
-    res.status(500).json({ message: 'Error fetching user', error: error.message });
+    console.error('Get current user error:', error);
+    res.status(500).json({ 
+      message: 'Error getting user data',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 });
 
@@ -395,107 +414,123 @@ router.post('/create-admin', async (req, res) => {
   }
 });
 
-// Register new user
+// Register with email verification
 router.post('/register', registerLimiter, async (req, res) => {
   try {
-    const { name, email, phone, password, authMethod = 'email' } = req.body;
+    const { name, email, phone, password, authMethod } = req.body;
+    
+    console.log('Registration attempt:', { name, email, phone, authMethod });
 
-    // Validate required fields based on auth method
-    if (authMethod === 'email' && (!email || !password)) {
-      return res.status(400).json({ message: 'Email and password are required' });
-    }
-    if (authMethod === 'phone' && !phone) {
-      return res.status(400).json({ message: 'Phone number is required' });
+    // Validate required fields
+    if (!name || !email || !phone || !password) {
+      return res.status(400).json({ message: 'All fields are required' });
     }
 
     // Check if user already exists
-    const existingUser = await User.findOne({
-      $or: [
-        { email: email || undefined },
-        { phone: phone || undefined },
-        { 'socialProfiles.google.email': email },
-        { 'socialProfiles.facebook.email': email }
-      ]
+    const existingUser = await User.findOne({ 
+      $or: [{ email }, { phone }] 
     });
 
     if (existingUser) {
-      return res.status(400).json({
-        message: 'User with this email or phone number already exists'
+      return res.status(400).json({ 
+        message: 'User already exists with this email or phone number' 
       });
     }
 
-    // Create user based on auth method
-    const userData = {
+    // Generate verification token
+    const { token, expiresAt } = generateVerificationToken();
+
+    // Create new user
+    const user = new User({
       name,
-      authMethods: [authMethod]
-    };
+      email,
+      phone,
+      password,
+      authMethods: [authMethod || 'email'],
+      verificationToken: token,
+      verificationTokenExpires: expiresAt
+    });
 
-    if (authMethod === 'email') {
-      userData.email = email;
-      userData.password = password;
-      userData.verificationToken = generateVerificationToken();
-      userData.verificationTokenExpires = new Date(Date.now() + 10 * 60 * 1000);
-    } else if (authMethod === 'phone') {
-      userData.phone = phone;
-      userData.isPhoneVerified = true; // Phone verification handled separately
-    }
-
-    const user = new User(userData);
     await user.save();
+    console.log('User created successfully:', user._id);
 
-    // Send verification email if using email auth
-    if (authMethod === 'email') {
-      const emailSent = await sendVerificationEmail(email, user.verificationToken);
-      res.status(201).json({
-        message: 'Registration successful. Please check your email for verification code.',
-        emailSent,
-        verificationToken: emailSent ? undefined : user.verificationToken
-      });
-    } else {
-      res.status(201).json({
-        message: 'Registration successful',
-        userId: user._id
+    // Send verification email
+    try {
+      await sendVerificationEmail(email, token);
+      console.log('Verification email sent successfully');
+    } catch (emailError) {
+      console.error('Error sending verification email:', emailError);
+      // Don't fail the registration if email fails
+    }
+
+    // In development, return the verification token
+    if (process.env.NODE_ENV === 'development') {
+      return res.status(201).json({
+        message: 'User registered successfully. Please verify your email.',
+        verificationToken: token // Only in development
       });
     }
+
+    res.status(201).json({
+      message: 'User registered successfully. Please verify your email.'
+    });
+
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ message: 'Error registering user', error: error.message });
+    res.status(500).json({ 
+      message: 'Error registering user',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 });
 
 // Verify email
 router.post('/verify-email', async (req, res) => {
   try {
-    const { email, token } = req.body;
+    const { email, verificationCode } = req.body;
 
-    const user = await User.findOne({ 
-      email,
-      verificationToken: token,
-      verificationTokenExpires: { $gt: Date.now() }
-    });
-
-    if (!user) {
-      return res.status(400).json({ 
-        message: 'Invalid or expired verification code' 
-      });
+    if (!email || !verificationCode) {
+      return res.status(400).json({ message: 'Email and verification code are required' });
     }
 
-    // Update user verification status
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.isEmailVerified) {
+      return res.status(400).json({ message: 'Email is already verified' });
+    }
+
+    if (!user.verificationToken || !user.verificationTokenExpires) {
+      return res.status(400).json({ message: 'No verification token found' });
+    }
+
+    if (Date.now() > user.verificationTokenExpires) {
+      return res.status(400).json({ message: 'Verification token has expired' });
+    }
+
+    if (user.verificationToken !== verificationCode) {
+      return res.status(400).json({ message: 'Invalid verification code' });
+    }
+
+    // Mark email as verified
     user.isEmailVerified = true;
     user.verificationToken = undefined;
     user.verificationTokenExpires = undefined;
     await user.save();
 
     // Generate JWT token
-    const jwtToken = jwt.sign(
-      { userId: user._id, role: user.role },
+    const token = jwt.sign(
+      { userId: user._id, email: user.email },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: JWT_EXPIRES_IN }
     );
 
     res.json({
       message: 'Email verified successfully',
-      token: jwtToken,
+      token,
       user: {
         id: user._id,
         name: user.name,
@@ -503,9 +538,13 @@ router.post('/verify-email', async (req, res) => {
         role: user.role
       }
     });
+
   } catch (error) {
     console.error('Email verification error:', error);
-    res.status(500).json({ message: 'Error verifying email', error: error.message });
+    res.status(500).json({ 
+      message: 'Error verifying email',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 });
 
@@ -546,18 +585,16 @@ router.post('/resend-verification', async (req, res) => {
   }
 });
 
-// Login user
+// Login
 router.post('/login', loginLimiter, async (req, res) => {
   try {
-    const { email, phone, password, authMethod = 'email' } = req.body;
+    const { email, password } = req.body;
 
-    // Find user based on auth method
-    let user;
-    if (authMethod === 'email') {
-      user = await User.findOne({ email });
-    } else if (authMethod === 'phone') {
-      user = await User.findOne({ phone });
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
     }
+
+    const user = await User.findOne({ email });
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
@@ -565,61 +602,56 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     // Check if account is locked
     if (user.isAccountLocked()) {
-      return res.status(401).json({
-        message: 'Account is locked. Please try again later.',
-        lockedUntil: user.accountLockedUntil
+      return res.status(401).json({ 
+        message: 'Account is locked. Please try again later.' 
       });
     }
 
-    // Verify credentials based on auth method
-    let isValid = false;
-    if (authMethod === 'email') {
-      if (!user.isEmailVerified) {
-        return res.status(401).json({
-          message: 'Please verify your email first',
-          email: user.email
-        });
-      }
-      isValid = await user.comparePassword(password);
-    } else if (authMethod === 'phone') {
-      if (!user.isPhoneVerified) {
-        return res.status(401).json({
-          message: 'Please verify your phone number first'
-        });
-      }
-      isValid = true; // Phone verification handled separately
-    }
-
-    if (!isValid) {
+    // Verify password
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
       await user.incrementLoginAttempts();
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     // Reset login attempts on successful login
     await user.resetLoginAttempts();
-    user.lastLogin = new Date();
+
+    // Check if email is verified
+    if (!user.isEmailVerified) {
+      return res.status(401).json({ 
+        message: 'Please verify your email before logging in' 
+      });
+    }
+
+    // Update last login
+    user.lastLogin = Date.now();
     await user.save();
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id, role: user.role },
+      { userId: user._id, email: user.email },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
 
     res.json({
+      message: 'Login successful',
       token,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
-        phone: user.phone,
         role: user.role
       }
     });
+
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Error logging in', error: error.message });
+    res.status(500).json({ 
+      message: 'Error logging in',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 });
 

@@ -3,270 +3,169 @@ import axios from 'axios';
 
 const AuthContext = createContext(null);
 
-// Create axios instance with default config
-const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'https://gcet-food-ordering-backend.onrender.com'
-});
-
-// Add request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [verificationStep, setVerificationStep] = useState('register'); // 'register', 'verify', 'login'
-  const [error, setError] = useState('');
-  const [apiError, setApiError] = useState(null);
-  const [verificationToken, setVerificationToken] = useState(null);
-  const [authMethod, setAuthMethod] = useState('email'); // 'email', 'phone', 'google', 'facebook'
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
+  // Create axios instance with default config
+  const api = axios.create({
+    baseURL: process.env.REACT_APP_API_URL || 'https://gcet-food-ordering-backend.onrender.com',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
 
+  // Add request interceptor to add token to headers
+  api.interceptors.request.use(
+    (config) => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error) => {
+      return Promise.reject(error);
+    }
+  );
+
+  // Add response interceptor to handle token expiration
+  api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token');
+        setUser(null);
+      }
+      return Promise.reject(error);
+    }
+  );
+
+  // Check authentication status
   const checkAuth = async () => {
     try {
-      const response = await api.get('/api/auth/current-user');
-      setUser(response.data);
-      setApiError(null);
-    } catch (error) {
-      console.error('Authentication check failed:', error.response?.data?.message || error.message);
-      setUser(null);
-      
-      // Only set API error if it's not a 401 (which is expected when not logged in)
-      if (error.response?.status !== 401) {
-        setApiError({
-          message: error.response?.data?.message || 'Failed to check authentication status',
-          status: error.response?.status
-        });
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setUser(null);
+        setLoading(false);
+        return;
       }
+
+      const response = await api.get('/api/auth/current-user');
+      setUser(response.data.user);
+      setError(null);
+    } catch (error) {
+      console.error('Authentication check failed:', error.message);
+      setUser(null);
+      setError('Authentication failed');
     } finally {
       setLoading(false);
     }
   };
 
+  // Register new user
   const register = async (userData) => {
     try {
-      setError('');
-      setApiError(null);
+      console.log('Registering user:', userData);
+      const response = await api.post('/api/auth/register', {
+        ...userData,
+        authMethod: 'email'
+      });
       
-      console.log('Registering user:', { ...userData, authMethod });
-      const response = await api.post('/api/auth/register', { ...userData, authMethod });
-      console.log('Registration response:', response.data);
-      
-      if (response.data.verificationToken) {
-        setVerificationToken(response.data.verificationToken);
+      // In development, show the verification token
+      if (process.env.NODE_ENV === 'development' && response.data.verificationToken) {
+        console.log('Verification token:', response.data.verificationToken);
       }
       
-      setVerificationStep('verify');
       return response.data;
     } catch (error) {
-      console.error('Error registering:', error);
-      setError(error.response?.data?.message || 'Failed to register');
-      setApiError({
-        message: error.response?.data?.message || 'Failed to register',
-        status: error.response?.status
-      });
+      console.error('Error registering:', error.response?.data || error.message);
       throw error;
     }
   };
 
-  const verifyEmail = async (email, token) => {
+  // Verify email
+  const verifyEmail = async (email, verificationCode) => {
     try {
-      setError('');
-      setApiError(null);
-      
-      console.log('Verifying email:', { email, token });
-      const response = await api.post('/api/auth/verify-email', { email, token });
-      console.log('Email verification response:', response.data);
-      
-      // Store the token
-      if (response.data.token) {
-        localStorage.setItem('token', response.data.token);
-      }
-      
-      setUser(response.data.user);
-      setVerificationStep('login');
+      const response = await api.post('/api/auth/verify-email', {
+        email,
+        verificationCode
+      });
+
+      const { token, user } = response.data;
+      localStorage.setItem('token', token);
+      setUser(user);
+      setError(null);
       return response.data;
     } catch (error) {
-      console.error('Error verifying email:', error);
-      setError(error.response?.data?.message || 'Invalid verification code');
-      setApiError({
-        message: error.response?.data?.message || 'Failed to verify email',
-        status: error.response?.status
-      });
+      console.error('Error verifying email:', error.response?.data || error.message);
       throw error;
     }
   };
 
+  // Resend verification code
   const resendVerification = async (email) => {
     try {
-      setError('');
-      setApiError(null);
-      
-      console.log('Resending verification to:', email);
       const response = await api.post('/api/auth/resend-verification', { email });
-      console.log('Resend verification response:', response.data);
-      
-      if (response.data.verificationToken) {
-        setVerificationToken(response.data.verificationToken);
-      }
-      
       return response.data;
     } catch (error) {
-      console.error('Error resending verification:', error);
-      setError(error.response?.data?.message || 'Failed to resend verification');
-      setApiError({
-        message: error.response?.data?.message || 'Failed to resend verification',
-        status: error.response?.status
-      });
+      console.error('Error resending verification:', error.response?.data || error.message);
       throw error;
     }
   };
 
-  const login = async (credentials) => {
+  // Login
+  const login = async (email, password) => {
     try {
-      setError('');
-      setApiError(null);
-      
-      console.log('Logging in:', { ...credentials, authMethod });
-      const response = await api.post('/api/auth/login', { ...credentials, authMethod });
-      console.log('Login response:', response.data);
-      
-      // Store the token
-      if (response.data.token) {
-        localStorage.setItem('token', response.data.token);
-      }
-      
-      setUser(response.data.user);
-      setVerificationStep('login');
+      const response = await api.post('/api/auth/login', { email, password });
+      const { token, user } = response.data;
+      localStorage.setItem('token', token);
+      setUser(user);
+      setError(null);
       return response.data;
     } catch (error) {
-      console.error('Error logging in:', error);
-      setError(error.response?.data?.message || 'Invalid credentials');
-      setApiError({
-        message: error.response?.data?.message || 'Failed to login',
-        status: error.response?.status
-      });
+      console.error('Error logging in:', error.response?.data || error.message);
       throw error;
     }
   };
 
-  const forgotPassword = async (email) => {
-    try {
-      setError('');
-      setApiError(null);
-      
-      console.log('Requesting password reset for:', email);
-      const response = await api.post('/api/auth/forgot-password', { email });
-      console.log('Forgot password response:', response.data);
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error requesting password reset:', error);
-      setError(error.response?.data?.message || 'Failed to request password reset');
-      setApiError({
-        message: error.response?.data?.message || 'Failed to request password reset',
-        status: error.response?.status
-      });
-      throw error;
-    }
+  // Logout
+  const logout = () => {
+    localStorage.removeItem('token');
+    setUser(null);
+    setError(null);
   };
 
-  const resetPassword = async (token, password) => {
-    try {
-      setError('');
-      setApiError(null);
-      
-      console.log('Resetting password with token');
-      const response = await api.post(`/api/auth/reset-password/${token}`, { password });
-      console.log('Reset password response:', response.data);
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error resetting password:', error);
-      setError(error.response?.data?.message || 'Failed to reset password');
-      setApiError({
-        message: error.response?.data?.message || 'Failed to reset password',
-        status: error.response?.status
-      });
-      throw error;
-    }
-  };
-
-  const resetVerification = () => {
-    setVerificationStep('register');
-    setVerificationToken(null);
-    setError('');
-    setApiError(null);
-  };
-
-  const logout = async () => {
-    try {
-      await api.post('/api/auth/logout');
-      localStorage.removeItem('token');
-      setUser(null);
-      setApiError(null);
-    } catch (error) {
-      console.error('Error logging out:', error);
-      setApiError({
-        message: error.response?.data?.message || 'Failed to logout',
-        status: error.response?.status
-      });
-    }
-  };
-
+  // Update user profile
   const updateProfile = async (profileData) => {
     try {
-      setApiError(null);
       const response = await api.put('/api/auth/profile', profileData);
-      setUser(response.data);
+      setUser(response.data.user);
       return response.data;
     } catch (error) {
-      console.error('Error updating profile:', error);
-      setApiError({
-        message: error.response?.data?.message || 'Failed to update profile',
-        status: error.response?.status
-      });
+      console.error('Error updating profile:', error.response?.data || error.message);
       throw error;
     }
   };
 
-  const setAuthenticationMethod = (method) => {
-    setAuthMethod(method);
-  };
+  // Check auth status on mount
+  useEffect(() => {
+    checkAuth();
+  }, []);
 
   return (
-    <AuthContext.Provider 
-      value={{ 
-        user, 
-        loading, 
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        error,
         register,
         verifyEmail,
         resendVerification,
         login,
-        verificationStep,
-        verificationToken,
-        resetVerification,
-        error,
-        apiError,
-        logout, 
-        updateProfile,
-        forgotPassword,
-        resetPassword,
-        authMethod,
-        setAuthenticationMethod
+        logout,
+        updateProfile
       }}
     >
       {children}
