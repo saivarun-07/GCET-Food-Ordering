@@ -16,7 +16,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", process.env.FRONTEND_URL, "https://gcet-food-ordering-frontend.onrender.com"],
+      connectSrc: ["'self'", process.env.FRONTEND_URL, "https://gcet-food-ordering-frontend.onrender.com", "https://canteen-frontend.onrender.com", "http://localhost:3000"],
       fontSrc: ["'self'", "https:", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
@@ -53,6 +53,7 @@ app.use(cors({
       'https://canteen-frontend-dqqv.onrender.com',
       'https://gcet-food-ordering-frontend.onrender.com',
       'https://gcet-food-ordering-frontend-oo9e.onrender.com',
+      'https://canteen-frontend.onrender.com',
       process.env.FRONTEND_URL,
       'http://localhost:3000' // Add localhost for development
     ].filter(Boolean);
