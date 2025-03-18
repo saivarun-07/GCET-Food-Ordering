@@ -126,6 +126,18 @@ router.get('/', isAdmin, async (req, res) => {
   }
 });
 
+// Get all orders (admin only) - additional route for frontend compatibility
+router.get('/all', isAdmin, async (req, res) => {
+  try {
+    const orders = await Order.find()
+      .sort({ createdAt: -1 });
+    res.json(orders);
+  } catch (error) {
+    console.error('Error fetching all orders:', error);
+    res.status(500).json({ message: 'Error fetching orders', error: error.message });
+  }
+});
+
 // Update order status (admin only)
 router.put('/:orderId/status', isAdmin, async (req, res) => {
   try {
