@@ -141,7 +141,7 @@ const AdminDashboard = () => {
                     Order ID: {order._id}
                   </p>
                   <p className="text-sm text-gray-500">
-                    Customer: {order.user.name}
+                    Customer: {order.customerDetails?.name || (order.user?.name || 'Guest')}
                   </p>
                   <p className="text-sm text-gray-500">
                     Placed on: {new Date(order.createdAt).toLocaleString()}
@@ -180,8 +180,7 @@ const AdminDashboard = () => {
                 <div>
                   <p className="font-medium">Delivery Location:</p>
                   <p className="text-sm text-gray-500">
-                    Block {order.deliveryLocation.block}, Class{' '}
-                    {order.deliveryLocation.classNumber}
+                    {order.deliveryLocation}
                   </p>
                 </div>
                 <div className="text-right">
