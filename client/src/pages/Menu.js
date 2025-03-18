@@ -14,12 +14,22 @@ const Menu = () => {
     block: '',
     classNumber: ''
   });
+  const [deliveryLocation, setDeliveryLocation] = useState('');
+  const [orderSuccess, setOrderSuccess] = useState(false);
 
   const categories = ['all', 'breakfast', 'lunch', 'dinner', 'snacks', 'beverages'];
 
   useEffect(() => {
     fetchMenuItems();
   }, []);
+
+  useEffect(() => {
+    if (checkoutDetails.block && checkoutDetails.classNumber) {
+      setDeliveryLocation(`Block ${checkoutDetails.block}, Room ${checkoutDetails.classNumber}`);
+    } else {
+      setDeliveryLocation('');
+    }
+  }, [checkoutDetails]);
 
   const fetchMenuItems = async () => {
     try {
@@ -73,41 +83,51 @@ const Menu = () => {
   };
 
   const placeOrder = async () => {
-    if (!checkoutDetails.name || !checkoutDetails.phone || !checkoutDetails.block || !checkoutDetails.classNumber) {
-      toast.error('Please fill in all delivery details');
-      return;
-    }
-
     try {
+      if (cart.length === 0) {
+        toast.error('Your cart is empty');
+        return;
+      }
+      
+      if (!deliveryLocation) {
+        toast.error('Please select a delivery location');
+        return;
+      }
+      
+      // Check for auth token 
+      const token = localStorage.getItem('token');
+      console.log('Order with token:', token ? 'Present' : 'Not present');
+      
       const orderData = {
-        customerDetails: {
-          name: checkoutDetails.name,
-          phone: checkoutDetails.phone
-        },
-        items: cart.map((item) => ({
+        items: cart.map(item => ({
           menuItemId: item._id,
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price
+          quantity: item.quantity
         })),
-        deliveryLocation: {
-          block: checkoutDetails.block,
-          classNumber: checkoutDetails.classNumber
+        deliveryLocation,
+        customerDetails: {
+          name: 'Guest User', // Hard-coded for now, should be taken from form input
+          phone: '1234567890'  // Hard-coded for now, should be taken from form input
         }
       };
-
-      await axios.post('/api/orders', orderData);
+      
+      console.log('Submitting order:', JSON.stringify(orderData, null, 2));
+      
+      const config = {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      };
+      
+      const response = await axios.post('/api/orders', orderData, config);
+      
+      console.log('Order response:', response.data);
+      
       setCart([]);
-      setCheckoutDetails({
-        name: '',
-        phone: '',
-        block: '',
-        classNumber: ''
-      });
-      setShowCheckout(false);
-      toast.success('Order placed successfully');
+      localStorage.removeItem('cart');
+      setOrderSuccess(true);
+      
+      toast.success('Order placed successfully!');
     } catch (error) {
-      toast.error('Failed to place order');
+      console.error('Error placing order:', error);
+      toast.error(error.response?.data?.message || 'Failed to place order. Please try again.');
     }
   };
 

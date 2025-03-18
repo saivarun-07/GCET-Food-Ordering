@@ -75,31 +75,79 @@ const getUserId = (req) => {
 // Create new order (guest or authenticated)
 router.post('/', async (req, res) => {
   try {
+    console.log('Create order request body:', JSON.stringify(req.body, null, 2));
+    
     const { items, deliveryLocation, customerDetails } = req.body;
+    
+    // Validate required fields
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'Order must contain at least one item' });
+    }
+    
+    if (!deliveryLocation) {
+      return res.status(400).json({ message: 'Delivery location is required' });
+    }
+    
+    if (!customerDetails || !customerDetails.name || !customerDetails.phone) {
+      return res.status(400).json({ message: 'Customer name and phone are required' });
+    }
     
     // Calculate total amount
     let totalAmount = 0;
+    const enhancedItems = [];
+    
     for (const item of items) {
-      const menuItem = await Menu.findById(item.menuItemId);
-      if (!menuItem) {
-        return res.status(404).json({ message: `Menu item ${item.menuItemId} not found` });
+      try {
+        console.log('Looking up menu item:', item.menuItemId);
+        const menuItem = await Menu.findById(item.menuItemId);
+        
+        if (!menuItem) {
+          console.error(`Menu item not found: ${item.menuItemId}`);
+          return res.status(404).json({ message: `Menu item ${item.menuItemId} not found` });
+        }
+        
+        // Add menu item details to the order item
+        enhancedItems.push({
+          menuItemId: menuItem._id,
+          name: menuItem.name,
+          price: menuItem.price,
+          quantity: item.quantity
+        });
+        
+        totalAmount += menuItem.price * item.quantity;
+      } catch (itemError) {
+        console.error('Error processing menu item:', itemError);
+        return res.status(400).json({ 
+          message: 'Invalid menu item', 
+          error: itemError.message,
+          item: item
+        });
       }
-      totalAmount += menuItem.price * item.quantity;
     }
 
+    console.log('Creating order with enhanced items:', enhancedItems);
+    console.log('Total amount:', totalAmount);
+    
     const order = new Order({
-      items,
+      items: enhancedItems,
       totalAmount,
       deliveryLocation,
       customerDetails,
       status: 'pending'
     });
 
-    await order.save();
-    res.status(201).json(order);
+    console.log('Order object created, about to save');
+    const savedOrder = await order.save();
+    console.log('Order saved successfully:', savedOrder._id);
+    
+    res.status(201).json(savedOrder);
   } catch (error) {
     console.error('Error creating order:', error);
-    res.status(500).json({ message: 'Error creating order', error: error.message });
+    res.status(500).json({ 
+      message: 'Error creating order', 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
