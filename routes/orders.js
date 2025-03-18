@@ -32,11 +32,17 @@ const isAuthenticated = (req, res, next) => {
 
 // Middleware to check if user is admin
 const isAdmin = (req, res, next) => {
-  // Get user from either session or JWT token verification
-  const user = req.session?.user || req.user;
-  
-  if (user && user.role === 'admin') {
-    return next();
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      if (decoded.role === 'admin') {
+        return next();
+      }
+    } catch (error) {
+      console.error('JWT verification error:', error.message);
+    }
   }
   res.status(403).json({ message: 'Not authorized' });
 };
@@ -46,15 +52,10 @@ const getUserId = (req) => {
   return (req.session?.user?._id || req.user?._id)?.toString();
 };
 
-// Create new order
-router.post('/', isAuthenticated, async (req, res) => {
+// Create new order (guest or authenticated)
+router.post('/', async (req, res) => {
   try {
-    const { items, deliveryLocation } = req.body;
-    const userId = getUserId(req);
-    
-    if (!userId) {
-      return res.status(401).json({ message: 'User ID not found in session or token' });
-    }
+    const { items, deliveryLocation, customerDetails } = req.body;
     
     // Calculate total amount
     let totalAmount = 0;
@@ -67,10 +68,11 @@ router.post('/', isAuthenticated, async (req, res) => {
     }
 
     const order = new Order({
-      user: userId,
       items,
       totalAmount,
-      deliveryLocation
+      deliveryLocation,
+      customerDetails,
+      status: 'pending'
     });
 
     await order.save();
@@ -100,11 +102,22 @@ router.get('/my-orders', isAuthenticated, async (req, res) => {
   }
 });
 
+// Get guest orders by phone number
+router.get('/guest/:phone', async (req, res) => {
+  try {
+    const orders = await Order.find({ 'customerDetails.phone': req.params.phone })
+      .sort({ createdAt: -1 });
+    res.json(orders);
+  } catch (error) {
+    console.error('Error fetching guest orders:', error);
+    res.status(500).json({ message: 'Error fetching orders', error: error.message });
+  }
+});
+
 // Get all orders (admin only)
-router.get('/', isAuthenticated, isAdmin, async (req, res) => {
+router.get('/', isAdmin, async (req, res) => {
   try {
     const orders = await Order.find()
-      .populate('user', 'name email')
       .sort({ createdAt: -1 });
     res.json(orders);
   } catch (error) {
@@ -114,7 +127,7 @@ router.get('/', isAuthenticated, isAdmin, async (req, res) => {
 });
 
 // Update order status (admin only)
-router.put('/:orderId/status', isAuthenticated, isAdmin, async (req, res) => {
+router.put('/:orderId/status', isAdmin, async (req, res) => {
   try {
     const { status } = req.body;
     const order = await Order.findByIdAndUpdate(

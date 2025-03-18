@@ -47,47 +47,27 @@ const Login = () => {
         case 'register':
           const result = await register({
             name: formData.name,
-            email: formData.email,
             phone: formData.phone,
             password: formData.password
           });
           if (result.success) {
-            setStep('verify');
-            setFormData(prev => ({
-              ...prev,
-              verificationEmail: result.email
-            }));
+            toast.success('Registration successful!');
+            setStep('login');
+            setFormData({ phone: formData.phone, password: '' });
           } else {
             setError(result.error);
-          }
-          break;
-
-        case 'verify':
-          const verifyResult = await verifyEmail(formData.email, formData.verificationCode);
-          if (verifyResult.success) {
-            setStep('login');
-            setFormData({ email: formData.email, password: '' });
-            toast.success('Email verified successfully! Please sign in.');
-          } else {
-            setError(verifyResult.error);
+            toast.error(result.error);
           }
           break;
 
         case 'login':
-          const loginResult = await login(formData.email, formData.password);
+          const loginResult = await login(formData.phone, formData.password);
           if (loginResult.success) {
             toast.success('Login successful!');
             navigate('/');
           } else {
-            if (loginResult.email) {
-              setStep('verify');
-              setFormData(prev => ({
-                ...prev,
-                verificationEmail: loginResult.email
-              }));
-            } else {
-              setError(loginResult.error);
-            }
+            setError(loginResult.error);
+            toast.error(loginResult.error);
           }
           break;
       }
@@ -105,29 +85,23 @@ const Login = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            {step === 'register' ? 'Create your account' : 
-             step === 'verify' ? 'Verify your email' : 
-             'Sign in to your account'}
+            {step === 'register' ? 'Create your account' : 'Sign in to your account'}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            {step === 'register' ? 'Already have an account?' : 
-             step === 'verify' ? 'Need to resend the code?' : 
-             "Don't have an account?"}{' '}
+            {step === 'register' ? 'Already have an account?' : "Don't have an account?"}{' '}
             <button
               onClick={() => {
                 if (step === 'register') {
                   setStep('login');
-                  setFormData({ email: '', password: '' });
-                } else if (step === 'login') {
+                  setFormData({ phone: '', password: '' });
+                } else {
                   setStep('register');
-                  setFormData({ name: '', email: '', phone: '', password: '' });
+                  setFormData({ name: '', phone: '', password: '' });
                 }
               }}
               className="font-medium text-indigo-600 hover:text-indigo-500"
             >
-              {step === 'register' ? 'Sign in' : 
-               step === 'verify' ? 'Resend code' : 
-               'Create account'}
+              {step === 'register' ? 'Sign in' : 'Create account'}
             </button>
           </p>
         </div>
@@ -165,33 +139,18 @@ const Login = () => {
               </div>
             )}
             <div>
-              <label htmlFor="email" className="sr-only">Email address</label>
+              <label htmlFor="phone" className="sr-only">Phone Number</label>
               <input
-                id="email"
-                name="email"
-                type="email"
+                id="phone"
+                name="phone"
+                type="tel"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
-                value={formData.email}
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Phone Number"
+                value={formData.phone}
                 onChange={handleChange}
               />
             </div>
-            {step === 'register' && (
-              <div>
-                <label htmlFor="phone" className="sr-only">Phone Number</label>
-                <input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  placeholder="Phone Number"
-                  value={formData.phone}
-                  onChange={handleChange}
-                />
-              </div>
-            )}
             <div>
               <label htmlFor="password" className="sr-only">Password</label>
               <input
@@ -207,30 +166,6 @@ const Login = () => {
             </div>
           </div>
 
-          {step === 'verify' && (
-            <div>
-              <label htmlFor="verificationCode" className="sr-only">Verification Code</label>
-              <input
-                id="verificationCode"
-                name="verificationCode"
-                type="text"
-                required
-                className="appearance-none rounded relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Enter verification code"
-                value={formData.verificationCode}
-                onChange={handleChange}
-              />
-              <button
-                type="button"
-                onClick={handleResendVerification}
-                className="mt-2 text-sm text-indigo-600 hover:text-indigo-500"
-                disabled={loading}
-              >
-                Resend verification code
-              </button>
-            </div>
-          )}
-
           <div>
             <button
               type="submit"
@@ -245,9 +180,7 @@ const Login = () => {
                   </svg>
                 </span>
               ) : null}
-              {step === 'register' ? 'Register' : 
-               step === 'verify' ? 'Verify Email' : 
-               'Sign In'}
+              {step === 'register' ? 'Register' : 'Sign In'}
             </button>
           </div>
         </form>

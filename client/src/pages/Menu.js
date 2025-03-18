@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
 const Menu = () => {
-  const { user } = useAuth();
   const [menuItems, setMenuItems] = useState([]);
   const [cart, setCart] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [checkoutDetails, setCheckoutDetails] = useState({
+    name: '',
+    phone: '',
+    block: '',
+    classNumber: ''
+  });
 
   const categories = ['all', 'breakfast', 'lunch', 'dinner', 'snacks', 'beverages'];
 
@@ -59,14 +64,26 @@ const Menu = () => {
     );
   };
 
+  const handleCheckoutDetailsChange = (e) => {
+    const { name, value } = e.target;
+    setCheckoutDetails(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   const placeOrder = async () => {
-    if (!user.block || !user.classNumber) {
-      toast.error('Please update your block and class number in your profile first');
+    if (!checkoutDetails.name || !checkoutDetails.phone || !checkoutDetails.block || !checkoutDetails.classNumber) {
+      toast.error('Please fill in all delivery details');
       return;
     }
 
     try {
       const orderData = {
+        customerDetails: {
+          name: checkoutDetails.name,
+          phone: checkoutDetails.phone
+        },
         items: cart.map((item) => ({
           menuItemId: item._id,
           name: item.name,
@@ -74,13 +91,20 @@ const Menu = () => {
           price: item.price
         })),
         deliveryLocation: {
-          block: user.block,
-          classNumber: user.classNumber
+          block: checkoutDetails.block,
+          classNumber: checkoutDetails.classNumber
         }
       };
 
       await axios.post('/api/orders', orderData);
       setCart([]);
+      setCheckoutDetails({
+        name: '',
+        phone: '',
+        block: '',
+        classNumber: ''
+      });
+      setShowCheckout(false);
       toast.success('Order placed successfully');
     } catch (error) {
       toast.error('Failed to place order');
@@ -189,12 +213,75 @@ const Menu = () => {
                     <span className="font-bold">Total:</span>
                     <span className="font-bold">₹{calculateTotal()}</span>
                   </div>
-                  <button
-                    onClick={placeOrder}
-                    className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700"
-                  >
-                    Place Order
-                  </button>
+                  {!showCheckout ? (
+                    <button
+                      onClick={() => setShowCheckout(true)}
+                      className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700"
+                    >
+                      Proceed to Checkout
+                    </button>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Name</label>
+                        <input
+                          type="text"
+                          name="name"
+                          value={checkoutDetails.name}
+                          onChange={handleCheckoutDetailsChange}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+                        <input
+                          type="tel"
+                          name="phone"
+                          value={checkoutDetails.phone}
+                          onChange={handleCheckoutDetailsChange}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Block</label>
+                        <input
+                          type="text"
+                          name="block"
+                          value={checkoutDetails.block}
+                          onChange={handleCheckoutDetailsChange}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Class Number</label>
+                        <input
+                          type="text"
+                          name="classNumber"
+                          value={checkoutDetails.classNumber}
+                          onChange={handleCheckoutDetailsChange}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                          required
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowCheckout(false)}
+                          className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-md hover:bg-gray-300"
+                        >
+                          Back to Cart
+                        </button>
+                        <button
+                          onClick={placeOrder}
+                          className="flex-1 bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700"
+                        >
+                          Place Order
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}
