@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+        h1 {
+            color: #4f46e5;
+            margin-bottom: 1.5rem;
+        }
+        button {
+            background-color: #4f46e5;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 1rem;
+        }
+        button:hover {
+            background-color: #4338ca;
+        }
+        p {
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+        .credentials {
+            background-color: #f9fafb;
+            padding: 1rem;
+            border-radius: 4px;
+            text-align: left;
+            margin-bottom: 1.5rem;
+        }
+        .success {
+            color: #10b981;
+            font-weight: bold;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Login Helper</h1>
+        <p>This page will help you access the admin dashboard by setting the admin JWT token directly in your browser.</p>
+        
+        <div class="credentials">
+            <p><strong>Admin Credentials:</strong></p>
+            <p>Name: BONALA SAI VARUN GUPTA</p>
+            <p>Phone: 8897128063</p>
+            <p>Role: admin</p>
+        </div>
+        
+        <p>Click the button below to automatically log in as admin:</p>
+        <button id="loginButton">Login as Admin</button>
+        <p id="success" class="success">Login successful! Redirecting to admin dashboard...</p>
+        
+        <script>
+            document.getElementById('loginButton').addEventListener('click', function() {
+                // Admin JWT token
+                const adminToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2N2Q5NDhhOTk3MjIxMTIwMDU2YTY5OWIiLCJwaG9uZSI6Ijg4OTcxMjgwNjMiLCJuYW1lIjoiQk9OQUxBIFNBSSBWQVJVTiBHVVBUQSIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTcxMDc2MzYzM30.JGe7-YyfYH9yf9QNb0Fz9Dx9eecGF5NX5aRRmgwFpA4';
+                
+                // Set the token in localStorage
+                localStorage.setItem('token', adminToken);
+                
+                // Show success message
+                document.getElementById('success').style.display = 'block';
+                
+                // Redirect to the main page after a short delay
+                setTimeout(function() {
+                    window.location.href = 'https://canteen-frontend-dqqv.onrender.com/';
+                }, 2000);
+            });
+        </script>
+    </div>
+</body>
+</html> 
