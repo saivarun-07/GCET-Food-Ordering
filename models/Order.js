@@ -1,6 +1,37 @@
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
+  items: [{
+    menuItemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Menu',
+      required: true
+    },
+    name: String,
+    price: Number,
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1
+    }
+  }],
+  totalAmount: {
+    type: Number,
+    required: true
+  },
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'preparing', 'ready', 'delivered', 'cancelled'],
+    default: 'pending'
+  },
+  deliveryLocation: {
+    type: String,
+    required: true
+  },
   customerDetails: {
     name: {
       type: String,
@@ -9,45 +40,12 @@ const orderSchema = new mongoose.Schema({
     phone: {
       type: String,
       required: true
-    }
-  },
-  items: [{
-    name: {
-      type: String,
-      required: true
     },
-    quantity: {
-      type: Number,
-      required: true,
-      min: 1
-    },
-    price: {
-      type: Number,
-      required: true
-    }
-  }],
-  totalAmount: {
-    type: Number,
-    required: true
-  },
-  status: {
-    type: String,
-    enum: ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled'],
-    default: 'pending'
-  },
-  deliveryLocation: {
-    block: {
-      type: String,
-      required: true
-    },
-    classNumber: {
-      type: String,
-      required: true
-    }
+    email: String
   },
   paymentStatus: {
     type: String,
-    enum: ['pending', 'completed'],
+    enum: ['pending', 'completed', 'failed'],
     default: 'pending'
   }
 }, {
