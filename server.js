@@ -8,19 +8,13 @@ const morgan = require('morgan');
 
 const app = express();
 
-// Add direct CORS headers to all responses
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://canteen-frontend-dqqv.onrender.com');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(204).send();
-  }
-  next();
-});
+// CORS configuration - place this before other middleware
+app.use(cors({
+  origin: ['https://canteen-frontend-dqqv.onrender.com'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 
 // Security middleware
 app.use(helmet({
@@ -30,7 +24,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://canteen-frontend-dqqv.onrender.com", "https://gcet-food-ordering-frontend.onrender.com", "https://gcet-food-ordering-frontend-oo9e.onrender.com", "https://canteen-frontend.onrender.com", "https://gcet-food-ordering.vercel.app", "http://localhost:3000"],
+      connectSrc: ["'self'", "https://canteen-frontend-dqqv.onrender.com", "https://gcet-food-ordering-backend.onrender.com"],
       fontSrc: ["'self'", "https:", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
@@ -50,42 +44,6 @@ app.use(morgan('combined'));
 // Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// CORS configuration
-app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // In development, allow all origins
-    if (process.env.NODE_ENV !== 'production') {
-      return callback(null, true);
-    }
-    
-    // In production, check against allowed origins
-    const allowedOrigins = [
-      'https://canteen-frontend-dqqv.onrender.com',
-      'https://gcet-food-ordering-frontend.onrender.com',
-      'https://gcet-food-ordering-frontend-oo9e.onrender.com',
-      'https://canteen-frontend.onrender.com',
-      'https://gcet-food-ordering.vercel.app',
-      process.env.FRONTEND_URL,
-      'http://localhost:3000'
-    ].filter(Boolean);
-    
-    if (allowedOrigins.indexOf(origin) === -1) {
-      console.log('CORS blocked for origin:', origin);
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  maxAge: 600 // 10 minutes
-}));
 
 // MongoDB connection
 const connectDB = async () => {
