@@ -414,215 +414,97 @@ router.post('/create-admin', async (req, res) => {
   }
 });
 
-// Register with email verification
+// Register with minimal information
 router.post('/register', registerLimiter, async (req, res) => {
   try {
-    const { name, email, phone, password, authMethod } = req.body;
+    const { name, phone, password } = req.body;
     
-    console.log('Registration attempt:', { name, email, phone, authMethod });
+    console.log('Registration attempt:', { name, phone });
 
     // Validate required fields
-    if (!name || !email || !phone || !password) {
-      return res.status(400).json({ message: 'All fields are required' });
-    }
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ 
-      $or: [{ email }, { phone }] 
-    });
-
-    if (existingUser) {
+    if (!name || !phone || !password) {
       return res.status(400).json({ 
-        message: 'User already exists with this email or phone number' 
+        success: false,
+        message: 'Name, phone number, and password are required' 
       });
     }
 
-    // Generate verification token
-    const { token, expiresAt } = generateVerificationToken();
+    // Check if user already exists
+    const existingUser = await User.findOne({ phone });
 
-    // Create new user
+    if (existingUser) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'User already exists with this phone number' 
+      });
+    }
+
+    // Create new user with minimal information
     const user = new User({
       name,
-      email,
       phone,
       password,
-      authMethods: [authMethod || 'email'],
-      verificationToken: token,
-      verificationTokenExpires: expiresAt
+      email: `user_${phone}@placeholder.com`, // Generate placeholder email
+      authMethods: ['phone'],
+      role: 'student',
+      isEmailVerified: true, // Skip email verification
+      isPhoneVerified: true, // Skip phone verification
+      isVerified: true, // Skip admin verification
+      profileCompleted: true // Mark profile as complete
     });
 
     await user.save();
     console.log('User created successfully:', user._id);
 
-    // Send verification email
-    try {
-      await sendVerificationEmail(email, token);
-      console.log('Verification email sent successfully');
-    } catch (emailError) {
-      console.error('Error sending verification email:', emailError);
-      // Don't fail the registration if email fails
-    }
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id, phone: user.phone },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
 
-    // In development, return the verification token
-    if (process.env.NODE_ENV === 'development') {
-      return res.status(201).json({
-        success: true,
-        message: 'User registered successfully. Please verify your email.',
-        email: email,
-        verificationToken: token // Only in development
-      });
-    }
-
+    // Return success with token
     res.status(201).json({
       success: true,
-      message: 'User registered successfully. Please verify your email.',
-      email: email
+      message: 'User registered successfully',
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        phone: user.phone,
+        role: user.role
+      }
     });
 
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ 
+      success: false,
       message: 'Error registering user',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
 });
 
-// Verify email
-router.post('/verify-email', async (req, res) => {
-  try {
-    const { email, verificationCode } = req.body;
-
-    if (!email || !verificationCode) {
-      return res.status(400).json({ message: 'Email and verification code are required' });
-    }
-
-    const user = await User.findOne({ email });
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    if (user.isEmailVerified) {
-      return res.status(400).json({ message: 'Email is already verified' });
-    }
-
-    if (!user.verificationToken || !user.verificationTokenExpires) {
-      return res.status(400).json({ message: 'No verification token found' });
-    }
-
-    if (Date.now() > user.verificationTokenExpires) {
-      return res.status(400).json({ message: 'Verification token has expired' });
-    }
-
-    if (user.verificationToken !== verificationCode) {
-      return res.status(400).json({ message: 'Invalid verification code' });
-    }
-
-    // Mark email as verified
-    user.isEmailVerified = true;
-    user.verificationToken = undefined;
-    user.verificationTokenExpires = undefined;
-    await user.save();
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user._id, email: user.email },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
-    );
-
-    res.json({
-      success: true,
-      message: 'Email verified successfully',
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
-    });
-
-  } catch (error) {
-    console.error('Email verification error:', error);
-    res.status(500).json({ 
-      message: 'Error verifying email',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-});
-
-// Resend verification email
-router.post('/resend-verification', async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    const user = await User.findOne({ email });
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    if (user.isEmailVerified) {
-      return res.status(400).json({ message: 'Email already verified' });
-    }
-
-    // Generate new verification token
-    const verificationToken = generateVerificationToken();
-    const verificationTokenExpires = new Date(Date.now() + 10 * 60 * 1000);
-
-    user.verificationToken = verificationToken;
-    user.verificationTokenExpires = verificationTokenExpires;
-    await user.save();
-
-    // Send verification email
-    const emailSent = await sendVerificationEmail(email, verificationToken);
-
-    res.json({
-      success: true,
-      message: 'Verification email sent successfully',
-      emailSent,
-      verificationToken: emailSent ? undefined : verificationToken
-    });
-  } catch (error) {
-    console.error('Resend verification error:', error);
-    res.status(500).json({ message: 'Error resending verification email', error: error.message });
-  }
-});
-
-// Login with email/password or phone/OTP
+// Simplified login with phone/password
 router.post('/login', loginLimiter, async (req, res) => {
   try {
-    console.log('Login attempt:', { email: req.body.email, authMethod: req.body.authMethod });
-    const { email, password, phone, otp, authMethod = 'email' } = req.body;
+    console.log('Login attempt:', { phone: req.body.phone });
+    const { phone, password } = req.body;
 
-    // Validate required fields based on auth method
-    if (authMethod === 'email' && (!email || !password)) {
-      console.log('Missing email or password');
+    // Validate required fields
+    if (!phone || !password) {
       return res.status(400).json({ 
         success: false,
-        message: 'Email and password are required' 
-      });
-    }
-    if (authMethod === 'phone' && (!phone || !otp)) {
-      console.log('Missing phone or OTP');
-      return res.status(400).json({ 
-        success: false,
-        message: 'Phone number and OTP are required' 
+        message: 'Phone number and password are required' 
       });
     }
 
-    // Find user based on auth method
-    let user;
-    if (authMethod === 'email') {
-      user = await User.findOne({ email });
-    } else if (authMethod === 'phone') {
-      user = await User.findOne({ phone });
-    }
+    // Find user by phone
+    const user = await User.findOne({ phone });
 
     if (!user) {
-      console.log('User not found:', { email, phone });
+      console.log('User not found:', { phone });
       return res.status(401).json({ 
         success: false,
         message: 'Invalid credentials' 
@@ -631,42 +513,18 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     // Check if account is locked
     if (user.isAccountLocked()) {
-      console.log('Account locked:', { email: user.email });
+      console.log('Account locked:', { phone: user.phone });
       return res.status(401).json({ 
         success: false,
         message: 'Account is locked. Please try again later.' 
       });
     }
 
-    // Verify credentials based on auth method
-    let isValid = false;
-    if (authMethod === 'email') {
-      if (!user.isEmailVerified) {
-        console.log('Email not verified:', { email: user.email });
-        return res.status(401).json({
-          success: false,
-          message: 'Please verify your email first',
-          email: user.email
-        });
-      }
-      isValid = await user.comparePassword(password);
-    } else if (authMethod === 'phone') {
-      if (!user.isPhoneVerified) {
-        console.log('Phone not verified:', { phone: user.phone });
-        return res.status(401).json({
-          success: false,
-          message: 'Please verify your phone number first'
-        });
-      }
-      // Check if OTP matches and is not expired
-      const now = new Date();
-      isValid = user.otpData && 
-                user.otpData.otp === otp && 
-                now <= new Date(user.otpData.expiresAt);
-    }
+    // Verify password
+    const isValid = await user.comparePassword(password);
 
     if (!isValid) {
-      console.log('Invalid credentials:', { email: user.email });
+      console.log('Invalid credentials:', { phone: user.phone });
       await user.incrementLoginAttempts();
       return res.status(401).json({ 
         success: false,
@@ -681,12 +539,12 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id, email: user.email },
+      { userId: user._id, phone: user.phone },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
 
-    console.log('Login successful:', { email: user.email });
+    console.log('Login successful:', { phone: user.phone });
     res.json({
       success: true,
       message: 'Login successful',
@@ -694,14 +552,8 @@ router.post('/login', loginLimiter, async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email,
         phone: user.phone,
-        role: user.role,
-        isEmailVerified: user.isEmailVerified,
-        isPhoneVerified: user.isPhoneVerified,
-        block: user.block,
-        classNumber: user.classNumber,
-        profileCompleted: user.profileCompleted
+        role: user.role
       }
     });
   } catch (error) {
@@ -771,6 +623,94 @@ router.post('/reset-password/:token', async (req, res) => {
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({ message: 'Error resetting password', error: error.message });
+  }
+});
+
+// Admin route to verify students
+router.post('/verify-student', verifyToken, async (req, res) => {
+  try {
+    // Check if user is admin
+    const admin = await User.findById(req.user.userId);
+    if (!admin || admin.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Only admins can verify students' 
+      });
+    }
+
+    const { studentId, isVerified } = req.body;
+
+    if (!studentId) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Student ID is required' 
+      });
+    }
+
+    const student = await User.findOne({ studentId });
+    if (!student) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Student not found' 
+      });
+    }
+
+    student.isVerified = isVerified;
+    await student.save();
+
+    res.json({
+      success: true,
+      message: `Student ${isVerified ? 'verified' : 'unverified'} successfully`,
+      student: {
+        id: student._id,
+        name: student.name,
+        studentId: student.studentId,
+        classNumber: student.classNumber,
+        block: student.block,
+        rollNumber: student.rollNumber,
+        isVerified: student.isVerified
+      }
+    });
+
+  } catch (error) {
+    console.error('Student verification error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error verifying student',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// Admin route to get unverified students
+router.get('/unverified-students', verifyToken, async (req, res) => {
+  try {
+    // Check if user is admin
+    const admin = await User.findById(req.user.userId);
+    if (!admin || admin.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Only admins can view unverified students' 
+      });
+    }
+
+    const unverifiedStudents = await User.find({ 
+      role: 'student',
+      isVerified: false 
+    }).select('-password');
+
+    res.json({
+      success: true,
+      students: unverifiedStudents
+    });
+
+  } catch (error) {
+    console.error('Error fetching unverified students:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching unverified students',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 });
 
