@@ -9,7 +9,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: MONGODB_URI
-        sync: false
+        value: mongodb+srv://23r11a6208:QNuUIm6CazuAzsbb@cluster0.fs4ph.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
       - key: SESSION_SECRET
         sync: false
       - key: FAST2SMS_API_KEY

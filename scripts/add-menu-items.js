@@ -5,6 +5,7 @@ const Menu = require('../models/Menu');
 // Connect to MongoDB
 const connectDB = async () => {
   try {
+    console.log('MongoDB URI:', process.env.MONGODB_URI?.replace(/\/\/[^:]+:[^@]+@/, '//****:****@'));
     console.log('Connecting to MongoDB...');
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('Connected to MongoDB');
