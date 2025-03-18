@@ -53,7 +53,8 @@ app.use(cors({
       'https://canteen-frontend-dqqv.onrender.com',
       'https://gcet-food-ordering-frontend.onrender.com',
       'https://gcet-food-ordering-frontend-oo9e.onrender.com',
-      process.env.FRONTEND_URL
+      process.env.FRONTEND_URL,
+      'http://localhost:3000' // Add localhost for development
     ].filter(Boolean);
     
     if (allowedOrigins.indexOf(origin) === -1) {
