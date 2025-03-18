@@ -196,7 +196,7 @@ router.post('/send-otp', async (req, res) => {
         note: 'OTP is included in the response for testing purposes'
       });
     }
-  } catch (error) {
+    } catch (error) {
     console.error('Error in send-otp:', error);
     res.status(500).json({ 
       message: 'Error generating OTP', 
@@ -594,14 +594,23 @@ router.post('/resend-verification', async (req, res) => {
 // Login with email/password or phone/OTP
 router.post('/login', loginLimiter, async (req, res) => {
   try {
+    console.log('Login attempt:', { email: req.body.email, authMethod: req.body.authMethod });
     const { email, password, phone, otp, authMethod = 'email' } = req.body;
 
     // Validate required fields based on auth method
     if (authMethod === 'email' && (!email || !password)) {
-      return res.status(400).json({ message: 'Email and password are required' });
+      console.log('Missing email or password');
+      return res.status(400).json({ 
+        success: false,
+        message: 'Email and password are required' 
+      });
     }
     if (authMethod === 'phone' && (!phone || !otp)) {
-      return res.status(400).json({ message: 'Phone number and OTP are required' });
+      console.log('Missing phone or OTP');
+      return res.status(400).json({ 
+        success: false,
+        message: 'Phone number and OTP are required' 
+      });
     }
 
     // Find user based on auth method
@@ -613,12 +622,18 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      console.log('User not found:', { email, phone });
+      return res.status(401).json({ 
+        success: false,
+        message: 'Invalid credentials' 
+      });
     }
 
     // Check if account is locked
     if (user.isAccountLocked()) {
+      console.log('Account locked:', { email: user.email });
       return res.status(401).json({ 
+        success: false,
         message: 'Account is locked. Please try again later.' 
       });
     }
@@ -627,7 +642,9 @@ router.post('/login', loginLimiter, async (req, res) => {
     let isValid = false;
     if (authMethod === 'email') {
       if (!user.isEmailVerified) {
+        console.log('Email not verified:', { email: user.email });
         return res.status(401).json({
+          success: false,
           message: 'Please verify your email first',
           email: user.email
         });
@@ -635,7 +652,9 @@ router.post('/login', loginLimiter, async (req, res) => {
       isValid = await user.comparePassword(password);
     } else if (authMethod === 'phone') {
       if (!user.isPhoneVerified) {
+        console.log('Phone not verified:', { phone: user.phone });
         return res.status(401).json({
+          success: false,
           message: 'Please verify your phone number first'
         });
       }
@@ -647,8 +666,12 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     if (!isValid) {
+      console.log('Invalid credentials:', { email: user.email });
       await user.incrementLoginAttempts();
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ 
+        success: false,
+        message: 'Invalid credentials' 
+      });
     }
 
     // Reset login attempts on successful login
@@ -663,6 +686,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       { expiresIn: JWT_EXPIRES_IN }
     );
 
+    console.log('Login successful:', { email: user.email });
     res.json({
       success: true,
       message: 'Login successful',
@@ -680,12 +704,12 @@ router.post('/login', loginLimiter, async (req, res) => {
         profileCompleted: user.profileCompleted
       }
     });
-
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ 
-      message: 'Error logging in',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      success: false,
+      message: 'An error occurred during login',
+      error: error.message 
     });
   }
 });
