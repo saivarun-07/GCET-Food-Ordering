@@ -11,8 +11,8 @@ import axios from 'axios';
 // Configure axios
 axios.defaults.withCredentials = true; // Include credentials in requests
 
-// Explicitly set the backend API URL
-axios.defaults.baseURL = 'https://gcet-food-ordering-backend.onrender.com';
+// Use the correct backend URL
+axios.defaults.baseURL = 'https://canteen-backend-6dp5.onrender.com';
 
 // Add request interceptor to log requests and ensure credentials
 axios.interceptors.request.use(request => {
