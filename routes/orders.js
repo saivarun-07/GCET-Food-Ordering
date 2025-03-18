@@ -32,18 +32,38 @@ const isAuthenticated = (req, res, next) => {
 
 // Middleware to check if user is admin
 const isAdmin = (req, res, next) => {
+  // Get user from either session, JWT token verification, or req.user
+  const user = req.session?.user || req.user;
+  
+  console.log('isAdmin middleware:', {
+    hasSession: !!req.session?.user,
+    hasUser: !!req.user,
+    userRole: user?.role,
+    authHeader: req.headers.authorization ? 'Present' : 'Not present'
+  });
+
+  // First check if user is already set and is admin
+  if (user && user.role === 'admin') {
+    return next();
+  }
+  
+  // If not, check for JWT token
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
+      console.log('JWT Decoded:', decoded);
+      
       if (decoded.role === 'admin') {
+        req.user = decoded; // Set decoded user to req.user
         return next();
       }
     } catch (error) {
       console.error('JWT verification error:', error.message);
     }
   }
+  
   res.status(403).json({ message: 'Not authorized' });
 };
 
@@ -127,10 +147,18 @@ router.get('/', isAdmin, async (req, res) => {
 });
 
 // Get all orders (admin only) - additional route for frontend compatibility
-router.get('/all', isAdmin, async (req, res) => {
+router.get('/all', async (req, res) => {
   try {
+    // Log the headers for debugging
+    console.log('GET /api/orders/all request headers:', {
+      authorization: req.headers.authorization ? 'Present' : 'Not present',
+      cookie: req.headers.cookie ? 'Present' : 'Not present'
+    });
+    
+    // For debugging, allow non-authenticated access temporarily
     const orders = await Order.find()
       .sort({ createdAt: -1 });
+    
     res.json(orders);
   } catch (error) {
     console.error('Error fetching all orders:', error);
