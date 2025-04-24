@@ -250,7 +250,11 @@ router.post('/verify-otp', async (req, res) => {
     };
 
     // Create JWT token
-    const token = jwt.sign(userData, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    const token = jwt.sign(
+      { userId: user._id, phone: user.phone, role: user.role },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
     console.log('Generated JWT token for user');
 
     // Set user in session
@@ -475,7 +479,7 @@ router.post('/register', registerLimiter, async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id, phone: user.phone },
+      { userId: user._id, phone: user.phone, role: user.role },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
@@ -556,7 +560,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id, phone: user.phone },
+      { userId: user._id, phone: user.phone, role: user.role },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );

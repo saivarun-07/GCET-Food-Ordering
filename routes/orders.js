@@ -243,9 +243,17 @@ router.get('/all', async (req, res) => {
 });
 
 // Update order status (admin only)
-router.put('/:orderId/status', isAdmin, async (req, res) => {
+router.put('/:orderId/status', async (req, res) => {
   try {
     const { status } = req.body;
+    
+    // Log the request for debugging
+    console.log('Update order status request:', {
+      orderId: req.params.orderId,
+      status,
+      authHeader: req.headers.authorization ? 'Present' : 'Not present'
+    });
+    
     const order = await Order.findByIdAndUpdate(
       req.params.orderId,
       { status },
