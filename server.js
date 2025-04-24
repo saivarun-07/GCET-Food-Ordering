@@ -156,6 +156,7 @@ const connectDB = async () => {
 // API Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/menu', require('./routes/menu'));
+app.use('/api/orders', require('./routes/orders'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
