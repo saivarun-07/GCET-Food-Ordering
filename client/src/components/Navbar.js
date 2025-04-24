@@ -1,13 +1,19 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const Navbar = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isActive = (path) => {
     return location.pathname === path ? 'bg-gray-900 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white';
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
   };
 
   return (
@@ -25,12 +31,14 @@ const Navbar = () => {
               >
                 Menu
               </Link>
-              <Link
-                to="/orders"
-                className={`px-3 py-2 rounded-md text-sm font-medium ${isActive('/orders')}`}
-              >
-                Orders
-              </Link>
+              {user && (
+                <Link
+                  to="/orders"
+                  className={`px-3 py-2 rounded-md text-sm font-medium ${isActive('/orders')}`}
+                >
+                  Orders
+                </Link>
+              )}
               {user?.role === 'admin' && (
                 <Link
                   to="/admin"
@@ -40,6 +48,26 @@ const Navbar = () => {
                 </Link>
               )}
             </div>
+          </div>
+          <div>
+            {user ? (
+              <div className="flex items-center">
+                <span className="text-gray-300 mr-4">Hi, {user.name || 'User'}</span>
+                <button
+                  onClick={handleLogout}
+                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Login / Register
+              </Link>
+            )}
           </div>
         </div>
       </div>

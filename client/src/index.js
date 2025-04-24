@@ -14,10 +14,16 @@ axios.defaults.withCredentials = true; // Include credentials in requests
 // Use the correct backend URL
 axios.defaults.baseURL = 'https://canteen-backend-6dp5.onrender.com';
 
-// Add request interceptor to log requests and ensure credentials
+// Add request interceptor to add auth token, log requests and ensure credentials
 axios.interceptors.request.use(request => {
   // Always ensure credentials are included in every request
   request.withCredentials = true;
+  
+  // Add authorization header if token exists
+  const token = localStorage.getItem('token');
+  if (token) {
+    request.headers.Authorization = `Bearer ${token}`;
+  }
   
   // Log requests in development
   if (process.env.NODE_ENV === 'development') {
