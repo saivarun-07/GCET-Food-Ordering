@@ -9,6 +9,9 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 
 const app = express();
 
+// Trust proxy - needed for hosting platforms like Render
+app.set('trust proxy', 1);
+
 // CORS configuration - place this before other middleware
 app.use(cors({
   origin: ['https://canteen-frontend-dqqv.onrender.com', 'http://localhost:3000'],
@@ -26,7 +29,29 @@ app.use(helmet({
 app.use(compression());
 
 // Logging middleware
-app.use(morgan('combined'));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// Add rate limiting for production
+if (process.env.NODE_ENV === 'production') {
+  const rateLimit = require('express-rate-limit');
+  
+  // Apply rate limiting to all requests
+  const globalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again later'
+  });
+  
+  app.use(globalLimiter);
+  
+  // Additional security headers for production
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('X-Frame-Options', 'DENY');
+    next();
+  });
+}
 
 // Body parser middleware
 app.use(express.json());

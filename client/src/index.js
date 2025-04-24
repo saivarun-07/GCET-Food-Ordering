@@ -12,9 +12,10 @@ import axios from 'axios';
 axios.defaults.withCredentials = true; // Include credentials in requests
 
 // Use the correct backend URL
-axios.defaults.baseURL = process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:5000' 
-  : 'https://canteen-backend-6dp5.onrender.com';
+axios.defaults.baseURL = 'https://canteen-backend-6dp5.onrender.com';
+
+// For debugging - log all requests
+console.log('Axios configured with production baseURL:', axios.defaults.baseURL);
 
 // Add request interceptor to add auth token, log requests and ensure credentials
 axios.interceptors.request.use(request => {

@@ -23,7 +23,7 @@ const registerLimiter = rateLimit({
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+const JWT_EXPIRES_IN = process.env.NODE_ENV === 'production' ? '12h' : '24h';
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -369,11 +369,21 @@ router.put('/profile', verifyToken, async (req, res) => {
 // TEMPORARY ROUTE TO CREATE ADMIN USER - REMOVE AFTER USE
 router.post('/create-admin', async (req, res) => {
   try {
-    const { phone, name, secretKey } = req.body;
+    const { phone, name, password, secretKey } = req.body;
+    
+    console.log('Admin creation attempt with:', { name, phone });
     
     // Security check - replace 'gcet-admin-secret' with your own secret password
     if (secretKey !== 'gcet-admin-secret') {
       return res.status(401).json({ message: 'Invalid secret key' });
+    }
+    
+    // Validate required fields
+    if (!name || !phone || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Name, phone, and password are required' 
+      });
     }
     
     let user = await User.findOne({ phone });
@@ -381,6 +391,9 @@ router.post('/create-admin', async (req, res) => {
     if (user) {
       // Update existing user to admin
       user.role = 'admin';
+      if (password) {
+        user.password = password;
+      }
       await user.save();
       console.log(`User with phone ${phone} updated to admin role`);
       res.json({ 
@@ -394,10 +407,14 @@ router.post('/create-admin', async (req, res) => {
       user = new User({
         phone,
         name,
+        password,
         email: placeholderEmail,
+        authMethods: ['phone'],
         role: 'admin',
         block: "",
         classNumber: "",
+        isEmailVerified: true,
+        isPhoneVerified: true,
         profileCompleted: true
       });
       await user.save();
