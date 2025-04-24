@@ -60,6 +60,16 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       console.log('Registering user:', userData);
+      
+      // Make sure we have all required fields
+      if (!userData.name || !userData.phone || !userData.password) {
+        console.error('Missing required fields for registration');
+        return { 
+          success: false, 
+          message: 'Name, phone number, and password are all required'
+        };
+      }
+      
       const response = await axios.post('/api/auth/register', {
         name: userData.name,
         phone: userData.phone,
@@ -77,17 +87,50 @@ export const AuthProvider = ({ children }) => {
         return { success: false, message: response.data.message };
       }
     } catch (error) {
-      console.error('Error registering:', error);
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Registration failed' 
-      };
+      console.error('Error registering:', error.message);
+      
+      // Better error handling
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Registration server error:', error.response.status, error.response.data);
+        return { 
+          success: false, 
+          message: error.response.data.message || `Server error (${error.response.status})`
+        };
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('No response from server:', error.request);
+        return { 
+          success: false, 
+          message: 'Could not connect to the server. Please try again later.'
+        };
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        return { 
+          success: false, 
+          message: 'Registration failed: ' + error.message
+        };
+      }
     }
   };
 
   const login = async (phone, password) => {
     try {
+      console.log('Login attempt with phone:', phone);
+      
+      // Make sure we have all required fields
+      if (!phone || !password) {
+        console.error('Missing required fields for login');
+        return { 
+          success: false, 
+          message: 'Phone number and password are required'
+        };
+      }
+      
       const response = await axios.post('/api/auth/login', { phone, password });
+      
+      console.log('Login response:', response.data);
       
       if (response.data.success) {
         const { token, user: userData } = response.data;
@@ -98,11 +141,31 @@ export const AuthProvider = ({ children }) => {
         return { success: false, message: response.data.message };
       }
     } catch (error) {
-      console.error('Error logging in:', error);
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Login failed' 
-      };
+      console.error('Error logging in:', error.message);
+      
+      // Better error handling
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Login server error:', error.response.status, error.response.data);
+        return { 
+          success: false, 
+          message: error.response.data.message || `Server error (${error.response.status})`
+        };
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('No response from server:', error.request);
+        return { 
+          success: false, 
+          message: 'Could not connect to the server. Please try again later.'
+        };
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        return { 
+          success: false, 
+          message: 'Login failed: ' + error.message
+        };
+      }
     }
   };
 
