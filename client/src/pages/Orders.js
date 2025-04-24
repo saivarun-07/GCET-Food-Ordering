@@ -19,13 +19,19 @@ const Orders = () => {
         }
       };
       
-      // For debug purposes, allow fetching all orders
-      // In production, this should be restricted to user's own orders
       let response;
       if (user && user.role === 'admin') {
+        // Admin users can see all orders
         response = await axios.get('/api/orders/all', config);
+      } else if (user && user.phone) {
+        // Regular users see only their orders by phone number
+        response = await axios.get(`/api/orders/guest/${user.phone}`, config);
       } else {
-        response = await axios.get('/api/orders/all', config);
+        // Fallback if somehow user is not properly authenticated
+        toast.error('User information not available. Please log in again.');
+        setOrders([]);
+        setLoading(false);
+        return;
       }
       
       console.log('Orders fetched:', response.data);
