@@ -182,6 +182,21 @@ app.get('/', (req, res) => {
   });
 });
 
+// Handle client-side routing for production
+if (process.env.NODE_ENV === 'production') {
+  const path = require('path');
+  // Serve static files from the React app build directory
+  app.use(express.static(path.join(__dirname, 'client/build')));
+  
+  // For any request that doesn't match one above, send back the index.html file
+  app.get('*', (req, res) => {
+    // Skip API routes
+    if (!req.path.startsWith('/api/')) {
+      res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+    }
+  });
+}
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server error:', err.stack);
