@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
+const { MongoMemoryServer } = require('mongodb-memory-server');
 
 const app = express();
 
@@ -33,22 +34,90 @@ app.use(express.json());
 // Configure MongoDB connection
 const connectDB = async () => {
   try {
-    console.log(`MongoDB URI exists: ${!!process.env.MONGODB_URI}`);
-    const mongoURI = process.env.MONGODB_URI;
+    let mongoURI = process.env.MONGODB_URI;
     
-    // Log the URI format (without showing credentials)
-    const uri = new URL(mongoURI);
-    console.log(`MongoDB URI format: ${uri.protocol}//${uri.username ? '****' : ''}:${uri.password ? '****' : ''}@${uri.host}${uri.pathname}${uri.search}`);
-    console.log(`Name=${uri.searchParams.get('appName') || 'Not specified'}`);
+    // Use in-memory MongoDB for development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Using in-memory MongoDB server for development');
+      const mongod = await MongoMemoryServer.create();
+      mongoURI = mongod.getUri();
+      
+      // Save the URI to be accessible by other scripts
+      process.env.MONGODB_MEMORY_URI = mongoURI;
+      
+      console.log(`In-memory MongoDB URI: ${mongoURI}`);
+    } else {
+      console.log(`MongoDB URI exists: ${!!process.env.MONGODB_URI}`);
+      
+      // When using MongoDB Atlas in production, use mongoose connection options
+      // that help with DNS issues and connection stability
+      const mongooseOptions = {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        serverSelectionTimeoutMS: 10000, // 10 seconds
+        socketTimeoutMS: 45000, // 45 seconds
+        family: 4 // Use IPv4 instead of trying IPv6 first
+      };
+      
+      // Log the URI format (without showing credentials)
+      try {
+        const uri = new URL(mongoURI);
+        console.log(`MongoDB URI format: ${uri.protocol}//${uri.username ? '****' : ''}:${uri.password ? '****' : ''}@${uri.host}${uri.pathname}${uri.search}`);
+        console.log(`Name=${uri.searchParams.get('appName') || 'Not specified'}`);
+      } catch (error) {
+        console.log(`Could not parse MongoDB URI: ${error.message}`);
+      }
+      
+      // Connect with the options for better reliability
+      await mongoose.connect(mongoURI, mongooseOptions);
+    }
     
-    await mongoose.connect(process.env.MONGODB_URI);
     console.log('MongoDB Connected');
+    
+    if (process.env.NODE_ENV === 'development') {
+      // Add some testing data - create admin user automatically
+      try {
+        const User = require('./models/User');
+        
+        // Check if admin user already exists
+        const existingAdmin = await User.findOne({ phone: '8897128063' });
+        
+        if (!existingAdmin) {
+          console.log('Creating default admin user...');
+          const admin = new User({
+            name: 'BONALA SAI VARUN GUPTA',
+            phone: '8897128063',
+            email: 'admin@gcet.com',
+            password: 'Bunty@007',
+            role: 'admin',
+            authMethods: ['phone', 'email'],
+            isEmailVerified: true,
+            isPhoneVerified: true,
+            profileCompleted: true
+          });
+          
+          await admin.save();
+          console.log('Default admin user created');
+        } else {
+          console.log('Admin user already exists');
+        }
+      } catch (error) {
+        console.error('Error creating default admin user:', error);
+      }
+    }
+    
     return true;
   } catch (error) {
     console.error('MongoDB connection error:', error.message);
+    if (error.message.includes('querySrv EREFUSED') || error.message.includes('ENOTFOUND')) {
+      console.error('DNS resolution error with MongoDB Atlas. This may be due to:');
+      console.error('1. Network connectivity issues - check your internet connection');
+      console.error('2. DNS server issues - try using a different DNS server');
+      console.error('3. Firewall blocking outbound DNS - check your firewall settings');
+    }
     console.error('If this is a connection refused error, please ensure MongoDB is running.');
-    console.error('If this is an authentication error, please check your MongoDB username and password.');
-    console.error('If this is a network error, please check your network connection and MongoDB Atlas IP whitelist.');
+    console.error('If this is an authentication error, check your MongoDB username and password.');
+    console.error('If this is a network error, check your network connection and MongoDB Atlas IP whitelist.');
     return false;
   }
 };
