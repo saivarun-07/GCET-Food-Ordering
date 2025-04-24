@@ -18,21 +18,7 @@ app.use(cors({
 
 // Security middleware
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://canteen-frontend-dqqv.onrender.com", "https://gcet-food-ordering-backend.onrender.com"],
-      fontSrc: ["'self'", "https:", "data:"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
-      sandbox: ['allow-forms', 'allow-scripts', 'allow-same-origin']
-    }
-  },
-  crossOriginEmbedderPolicy: false
+  contentSecurityPolicy: false,  // Disable CSP for development
 }));
 
 // Compression middleware
@@ -43,32 +29,41 @@ app.use(morgan('combined'));
 
 // Body parser middleware
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// MongoDB connection
+// Configure MongoDB connection
 const connectDB = async () => {
   try {
-    console.log('MongoDB URI exists:', !!process.env.MONGODB_URI);
-    console.log('MongoDB URI format:', process.env.MONGODB_URI?.replace(/\/\/[^:]+:[^@]+@/, '//****:****@'));
+    console.log(`MongoDB URI exists: ${!!process.env.MONGODB_URI}`);
+    const mongoURI = process.env.MONGODB_URI;
     
-    const conn = await mongoose.connect(process.env.MONGODB_URI);
+    // Log the URI format (without showing credentials)
+    const uri = new URL(mongoURI);
+    console.log(`MongoDB URI format: ${uri.protocol}//${uri.username ? '****' : ''}:${uri.password ? '****' : ''}@${uri.host}${uri.pathname}${uri.search}`);
+    console.log(`Name=${uri.searchParams.get('appName') || 'Not specified'}`);
+    
+    await mongoose.connect(process.env.MONGODB_URI);
     console.log('MongoDB Connected');
+    return true;
   } catch (error) {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
+    console.error('MongoDB connection error:', error.message);
+    console.error('If this is a connection refused error, please ensure MongoDB is running.');
+    console.error('If this is an authentication error, please check your MongoDB username and password.');
+    console.error('If this is a network error, please check your network connection and MongoDB Atlas IP whitelist.');
+    return false;
   }
 };
-
-connectDB();
 
 // API Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/menu', require('./routes/menu'));
-app.use('/api/orders', require('./routes/orders'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'API is running' });
+  res.json({ 
+    status: 'ok', 
+    message: 'API is running',
+    mongoConnection: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
 });
 
 // Root endpoint
@@ -81,47 +76,44 @@ app.get('/', (req, res) => {
       orders: '/api/orders',
       menu: '/api/menu',
       health: '/api/health'
-    }
-  });
-});
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    message: 'Not Found',
-    error: 'The requested resource was not found on this server'
+    },
+    mongoConnection: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
   });
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err.stack);
-  
-  // Handle specific error types
-  if (err.name === 'ValidationError') {
-    return res.status(400).json({
-      message: 'Validation Error',
-      error: err.message
-    });
-  }
-  
-  if (err.name === 'UnauthorizedError') {
-    return res.status(401).json({
-      message: 'Unauthorized',
-      error: 'Invalid or missing authentication token'
-    });
-  }
-  
-  // Default error response
-  res.status(500).json({ 
-    message: 'Internal Server Error',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong!'
+  console.error('Server error:', err.stack);
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? err.message : 'An unexpected error occurred'
+  });
+});
+
+// 404 handler for undefined routes
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Endpoint not found'
   });
 });
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-}); 
+// Start server only after connecting to MongoDB
+const startServer = async () => {
+  const isConnected = await connectDB();
+  
+  if (isConnected) {
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+  } else {
+    console.error('Failed to connect to MongoDB. Server will not start.');
+    process.exit(1);
+  }
+};
+
+startServer(); 

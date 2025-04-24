@@ -22,7 +22,10 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true,
+    required: function() {
+      // Only require password for regular users, not OAuth users
+      return this.authMethods && this.authMethods.includes('email');
+    },
     minlength: 6
   },
   role: {
@@ -97,13 +100,18 @@ const userSchema = new mongoose.Schema({
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
+  // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) return next();
+  
+  // Skip hashing if password is empty (for OAuth users)
+  if (!this.password) return next();
   
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {
+    console.error('Error hashing password:', error);
     next(error);
   }
 });
@@ -111,8 +119,12 @@ userSchema.pre('save', async function(next) {
 // Compare password method
 userSchema.methods.comparePassword = async function(candidatePassword) {
   try {
+    // If user has no password (OAuth users), always fail password comparison
+    if (!this.password) return false;
+    
     return await bcrypt.compare(candidatePassword, this.password);
   } catch (error) {
+    console.error('Error comparing password:', error);
     throw error;
   }
 };
