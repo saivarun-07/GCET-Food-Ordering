@@ -89,6 +89,12 @@ const Menu = () => {
         return;
       }
       
+      // Validate checkout details
+      if (!checkoutDetails.name || !checkoutDetails.phone) {
+        toast.error('Please provide your name and phone number');
+        return;
+      }
+      
       if (!deliveryLocation) {
         toast.error('Please select a delivery location');
         return;
@@ -105,8 +111,8 @@ const Menu = () => {
         })),
         deliveryLocation,
         customerDetails: {
-          name: 'Guest User', // Hard-coded for now, should be taken from form input
-          phone: '1234567890'  // Hard-coded for now, should be taken from form input
+          name: checkoutDetails.name,
+          phone: checkoutDetails.phone
         }
       };
       
