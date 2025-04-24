@@ -5,7 +5,13 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
-const { MongoMemoryServer } = require('mongodb-memory-server');
+
+// Only import MongoMemoryServer in development
+let MongoMemoryServer;
+if (process.env.NODE_ENV === 'development') {
+  const { MongoMemoryServer: MemServer } = require('mongodb-memory-server');
+  MongoMemoryServer = MemServer;
+}
 
 const app = express();
 
@@ -62,7 +68,7 @@ const connectDB = async () => {
     let mongoURI = process.env.MONGODB_URI;
     
     // Use in-memory MongoDB for development
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development' && MongoMemoryServer) {
       console.log('Using in-memory MongoDB server for development');
       const mongod = await MongoMemoryServer.create();
       mongoURI = mongod.getUri();
