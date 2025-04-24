@@ -144,6 +144,9 @@ const AdminDashboard = () => {
                     Customer: {order.customerDetails?.name || (order.user?.name || 'Guest')}
                   </p>
                   <p className="text-sm text-gray-500">
+                    Phone: {order.customerDetails?.phone || (order.user?.phone || 'N/A')}
+                  </p>
+                  <p className="text-sm text-gray-500">
                     Placed on: {new Date(order.createdAt).toLocaleString()}
                   </p>
                 </div>
